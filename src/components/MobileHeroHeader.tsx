@@ -15,10 +15,12 @@ import {
   Keyboard
 } from 'lucide-react';
 import kcSkylineImg from '../assets/images/kc_skyline_hero_1786041016879.jpg';
+import { DeploymentMode } from '../config/runtime';
 
 interface MobileHeroHeaderProps {
   currentArea: string;
   mcpSource: 'mcp_server' | 'mock_adapter';
+  deploymentMode: DeploymentMode;
   onOpenMenu: () => void;
   onOpenMcpModal: () => void;
   onOpenShortcutsModal?: () => void;
@@ -28,6 +30,7 @@ interface MobileHeroHeaderProps {
 export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
   currentArea,
   mcpSource,
+  deploymentMode,
   onOpenMenu,
   onOpenMcpModal,
   onOpenShortcutsModal,
@@ -58,10 +61,10 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
         {/* Center Title */}
         <div className="text-center">
           <h1 className="font-bold text-base md:text-lg text-white tracking-tight leading-tight">
-            Kansas Cities
+            KC Real Estate Market Explorer
           </h1>
           <p className="text-[11px] text-purple-200/90 font-medium tracking-wide">
-            Real Estate Opportunities
+            Kansas City Metro Housing Intelligence
           </p>
         </div>
 
@@ -78,7 +81,7 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
             title="Click to inspect Zillow MCP"
           >
             <Database className="w-3 h-3" />
-            <span>{mcpSource === 'mcp_server' ? 'MCP Connected' : 'MCP Mock'}</span>
+            <span>{deploymentMode === 'static' ? 'Local Dataset' : mcpSource === 'mcp_server' ? 'MCP Connected' : 'Local Adapter'}</span>
           </button>
 
           {onOpenShortcutsModal && (
@@ -119,10 +122,10 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
         {/* Content Overlay */}
         <div className="relative z-10 max-w-xl mx-auto space-y-2">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-snug drop-shadow-md">
-            Your Next Move Starts Here.
+            Explore Kansas City Housing.
           </h2>
           <p className="text-xs sm:text-sm text-purple-200/90 font-medium tracking-wide">
-            Discover. Connect. Kansas.
+            Fixture-backed properties, comparables, mapping, and market analytics.
           </p>
         </div>
 
@@ -138,8 +141,13 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search city, area, or ZIP code"
+              list="kc-supported-markets"
               className="w-full bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
             />
+            <datalist id="kc-supported-markets">
+              <option value="Kansas City, MO" />
+              <option value="Overland Park, KS 66204" />
+            </datalist>
           </div>
           <button
             type="submit"

@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { Property } from '../types';
+import { DeploymentMode } from '../config/runtime';
 import { PriceHistoryD3Chart } from './PriceHistoryD3Chart';
 import { 
   X, 
@@ -26,22 +27,27 @@ import {
 } from 'lucide-react';
 
 interface PropertyDetailDrawerProps {
+  isOpen: boolean;
   property: Property | null;
+  deploymentMode: DeploymentMode;
   onClose: () => void;
 }
 
 export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
+  isOpen,
   property,
+  deploymentMode,
   onClose,
 }) => {
-  if (!property) return null;
-
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   // Mortgage Calculator State
   const [downPaymentPct, setDownPaymentPct] = useState(20);
   const [interestRatePct, setInterestRatePct] = useState(6.8);
   const [loanTermYears, setLoanTermYears] = useState(30);
+
+  if (!isOpen || !property) return null;
+  const isStatic = deploymentMode === 'static';
 
   // Calculate Payment
   const principal = property.price * (1 - downPaymentPct / 100);
@@ -60,19 +66,20 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs transition-opacity overflow-hidden">
-      <div className="bg-[#f8f7f2] w-full max-w-2xl h-full shadow-2xl flex flex-col border-l border-[#d6d1c4] overflow-hidden animate-in slide-in-from-right duration-200">
+      <div role="dialog" aria-modal="true" aria-labelledby="property-detail-title" className="bg-[#f8f7f2] w-full max-w-2xl h-full shadow-2xl flex flex-col border-l border-[#d6d1c4] overflow-hidden animate-in slide-in-from-right duration-200">
         {/* Header Bar */}
         <div className="bg-[#2d3748] text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-[#d69e2e]" />
             <div>
-              <h2 className="font-semibold text-sm line-clamp-1">{property.address.street}</h2>
+              <h2 id="property-detail-title" className="font-semibold text-sm line-clamp-1">{property.address.street}</h2>
               <p className="text-[11px] text-gray-300">{property.address.city}, {property.address.state} {property.address.zipCode}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
+              aria-label="Close property details"
               className="text-gray-300 hover:text-white p-1 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
@@ -112,7 +119,7 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
                       activeImageIdx === idx ? 'border-[#2b6cb0] ring-2 ring-[#2b6cb0]/20' : 'border-transparent opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <img src={img} alt="thumb" className="w-full h-full object-cover" />
+                    <img src={img} alt={`${property.address.street} view ${idx + 1}`} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -133,13 +140,13 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
             <div className="flex gap-4 border-l pl-4 border-gray-200">
               {property.zestimate && (
                 <div>
-                  <div className="text-[10px] uppercase font-bold text-gray-400">Zestimate®</div>
+                  <div className="text-[10px] uppercase font-bold text-gray-400">{isStatic ? 'Fixture estimate' : 'Zestimate®'}</div>
                   <div className="font-bold text-gray-800 text-sm">${property.zestimate.toLocaleString()}</div>
                 </div>
               )}
               {property.rentZestimate && (
                 <div>
-                  <div className="text-[10px] uppercase font-bold text-gray-400">Rent Zestimate®</div>
+                  <div className="text-[10px] uppercase font-bold text-gray-400">{isStatic ? 'Fixture rent estimate' : 'Rent Zestimate®'}</div>
                   <div className="font-bold text-gray-800 text-sm">${property.rentZestimate.toLocaleString()}/mo</div>
                 </div>
               )}
@@ -178,7 +185,7 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
                 <span className="font-semibold">Property Type:</span> {property.propertyType}
               </div>
               <div className="flex items-center gap-1.5 text-gray-700">
-                <span className="font-semibold">Days on Zillow:</span> {property.daysOnMarket} days
+                <span className="font-semibold">{isStatic ? 'Days in fixture:' : 'Days on Zillow:'}</span> {property.daysOnMarket} days
               </div>
               <div className="flex items-center gap-1.5 text-gray-700">
                 <span className="font-semibold">HOA Fee:</span> ${property.hoaFee || 0}/mo
@@ -218,6 +225,7 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
                   step="5"
                   value={downPaymentPct}
                   onChange={(e) => setDownPaymentPct(Number(e.target.value))}
+                  aria-label="Down payment percentage"
                   className="w-full accent-[#2b6cb0]"
                 />
               </div>
@@ -234,6 +242,7 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
                   step="0.1"
                   value={interestRatePct}
                   onChange={(e) => setInterestRatePct(Number(e.target.value))}
+                  aria-label="Interest rate percentage"
                   className="w-full accent-[#2b6cb0]"
                 />
               </div>
@@ -300,7 +309,7 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
                             </span>
                           ) : '—'}
                         </td>
-                        <td className="py-2 px-1 text-gray-400 text-[11px]">{item.source || 'Zillow MCP'}</td>
+                        <td className="py-2 px-1 text-gray-400 text-[11px]">{isStatic ? 'Fixture record' : item.source || 'Zillow MCP'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -370,9 +379,9 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
           <div className="bg-[#efece1] p-3 rounded-xl border border-[#d6d1c4] flex items-center justify-between text-[11px] text-gray-600">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-emerald-700" />
-              <span>Data Source: <strong className="text-gray-800">{property.sourceAttribution}</strong></span>
+              <span>Data Source: <strong className="text-gray-800">{isStatic ? 'Local fixture/demo record' : property.sourceAttribution}</strong></span>
             </div>
-            <span className="text-gray-500">Fetched: {new Date(property.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="text-gray-500">{isStatic ? 'Loaded locally' : `Fetched: ${new Date(property.retrievedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}</span>
           </div>
         </div>
       </div>

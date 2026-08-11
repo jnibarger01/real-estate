@@ -74,8 +74,8 @@ export class MarketAnalyticsService {
       ? Math.round((ratioList.reduce((a, b) => a + b, 0) / ratioList.length) * 10) / 10 
       : 98.4;
 
-    // Estimate YoY Price Trend
-    const priceTrendPct = 6.4;
+    // Historical year-over-year data is not present in the fixture.
+    const priceTrendPct = 0;
 
     return {
       totalProperties: properties.length,
@@ -212,7 +212,7 @@ export class MarketAnalyticsService {
         medianPricePerSqFt: this.calculateMedian(ppsqft),
         salesVolume: list.length,
         daysOnMarket: Math.round(dom.reduce((a, b) => a + b, 0) / (dom.length || 1)),
-        yoyChangePct: Math.round((3 + Math.random() * 5) * 10) / 10,
+        yoyChangePct: 0,
       };
     });
   }
