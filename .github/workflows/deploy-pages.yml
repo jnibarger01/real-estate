@@ -33,11 +33,13 @@ jobs:
         run: bun run lint
 
       - name: Build GitHub Pages frontend
+        env:
+          VITE_API_BASE_URL: ${{ vars.KC_REAL_ESTATE_API_BASE_URL }}
         run: bun run build:pages
 
       - name: Reject secrets in compiled output
         run: |
-          if grep -R -E 'GEMINI_API_KEY|ZILLOW_MCP_SERVER_URL|PRIVATE KEY-----' dist; then
+          if grep -R -E 'GEMINI_API_KEY|RENTCAST_API_KEY|ZILLOW_MCP_SERVER_URL|PRIVATE KEY-----' dist; then
             echo 'Potential secret material found in dist.' >&2
             exit 1
           fi

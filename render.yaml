@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: kc-real-estate-api
+    runtime: node
+    plan: free
+    buildCommand: bun install --frozen-lockfile && bun run build:backend
+    startCommand: bun run start:backend
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: RENTCAST_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://jnibarger01.github.io

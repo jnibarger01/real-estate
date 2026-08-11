@@ -24,9 +24,17 @@ export interface HeatmapPoint {
   weight: number;
 }
 
+const NO_LISTING_PHOTO = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#e5e7eb"/>
+  <path d="M420 520V350l180-140 180 140v170H650V410H550v110H420Z" fill="#9ca3af"/>
+  <text x="600" y="610" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" fill="#4b5563">No listing photo supplied</text>
+</svg>`)} `;
+
 export class MapDataTransformer {
   /**
-   * Normalizes raw Zillow / MCP tool responses into strict Property models.
+   * Normalizes raw provider / MCP responses into strict Property models.
+   * Live records intentionally keep unavailable fields empty instead of inventing estimates.
    */
   static normalizePropertyData(raw: any): Property {
     const defaultDate = new Date().toISOString().split('T')[0];
@@ -35,12 +43,14 @@ export class MapDataTransformer {
     const city = rawAddr.city || raw.city || 'Unknown City';
     const state = rawAddr.state || raw.state || 'XX';
     const zipCode = String(rawAddr.zipCode || rawAddr.zipcode || raw.zipCode || '00000');
-    const lat = Number(raw.latitude || raw.lat || rawAddr.latitude || rawAddr.lat || 38.9842);
-    const lng = Number(raw.longitude || raw.lng || rawAddr.longitude || rawAddr.lng || -94.6685);
+    const lat = Number(raw.latitude ?? raw.lat ?? rawAddr.latitude ?? rawAddr.lat ?? 38.9842);
+    const lng = Number(raw.longitude ?? raw.lng ?? rawAddr.longitude ?? rawAddr.lng ?? -94.6685);
 
-    const price = Number(raw.price || raw.unformattedPrice || raw.listPrice || 0);
-    const livingAreaSqFt = Number(raw.livingArea || raw.livingAreaSqFt || raw.sqft || raw.buildingArea || 1000);
+    const price = Number(raw.price ?? raw.unformattedPrice ?? raw.listPrice ?? 0);
+    const livingAreaSqFt = Number(raw.livingArea ?? raw.livingAreaSqFt ?? raw.sqft ?? raw.buildingArea ?? 0);
     const pricePerSqFt = price && livingAreaSqFt ? Math.round(price / livingAreaSqFt) : Number(raw.pricePerSqFt || 0);
+    const isMockData = Boolean(raw.isMockData);
+    const images = Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : [NO_LISTING_PHOTO];
 
     return {
       id: String(raw.id || raw.zpid || `prop-${Math.random().toString(36).substring(2, 9)}`),
@@ -50,49 +60,45 @@ export class MapDataTransformer {
         city,
         state,
         zipCode,
-        neighborhood: rawAddr.neighborhood || raw.neighborhood || `${city} Central`,
+        neighborhood: rawAddr.neighborhood || raw.neighborhood || undefined,
         lat: isNaN(lat) ? 38.9842 : lat,
         lng: isNaN(lng) ? -94.6685 : lng,
       },
       price,
-      originalPrice: Number(raw.originalPrice || price),
-      lastSoldPrice: raw.lastSoldPrice ? Number(raw.lastSoldPrice) : undefined,
+      originalPrice: raw.originalPrice != null ? Number(raw.originalPrice) : undefined,
+      lastSoldPrice: raw.lastSoldPrice != null ? Number(raw.lastSoldPrice) : undefined,
       lastSoldDate: raw.lastSoldDate || undefined,
-      status: (['for_sale', 'recently_sold', 'pending', 'foreclosure'].includes(raw.status) 
-        ? raw.status 
+      status: (['for_sale', 'recently_sold', 'pending', 'foreclosure'].includes(raw.status)
+        ? raw.status
         : (raw.homeStatus === 'RECENTLY_SOLD' ? 'recently_sold' : raw.homeStatus === 'PENDING' ? 'pending' : 'for_sale')),
       propertyType: (['single_family', 'condo', 'townhouse', 'multi_family', 'manufactured', 'land'].includes(raw.propertyType)
         ? raw.propertyType
         : 'single_family'),
-      bedrooms: Number(raw.bedrooms || raw.beds || 2),
-      bathrooms: Number(raw.bathrooms || raw.baths || 1),
+      bedrooms: Number(raw.bedrooms ?? raw.beds ?? 0),
+      bathrooms: Number(raw.bathrooms ?? raw.baths ?? 0),
       livingAreaSqFt,
-      lotSizeSqFt: Number(raw.lotSizeSqFt || raw.lotSize || 0),
-      yearBuilt: Number(raw.yearBuilt || 1980),
+      lotSizeSqFt: Number(raw.lotSizeSqFt ?? raw.lotSize ?? 0),
+      yearBuilt: Number(raw.yearBuilt ?? 0),
       pricePerSqFt,
-      daysOnMarket: Number(raw.daysOnMarket || raw.daysOnZillow || 10),
+      daysOnMarket: Number(raw.daysOnMarket ?? raw.daysOnZillow ?? 0),
       dateListed: raw.dateListed || defaultDate,
-      zestimate: raw.zestimate ? Number(raw.zestimate) : price,
-      rentZestimate: raw.rentZestimate ? Number(raw.rentZestimate) : Math.round(price * 0.005),
-      hoaFee: raw.hoaFee ? Number(raw.hoaFee) : 0,
-      priceReduced: Boolean(raw.priceReduced || (raw.originalPrice && price < raw.originalPrice)),
-      priceReductionAmount: raw.priceReductionAmount || (raw.originalPrice && price < raw.originalPrice ? raw.originalPrice - price : 0),
+      zestimate: raw.zestimate != null ? Number(raw.zestimate) : undefined,
+      rentZestimate: raw.rentZestimate != null ? Number(raw.rentZestimate) : undefined,
+      hoaFee: raw.hoaFee != null ? Number(raw.hoaFee) : undefined,
+      priceReduced: Boolean(raw.priceReduced || (raw.originalPrice != null && price < Number(raw.originalPrice))),
+      priceReductionAmount: raw.priceReductionAmount != null
+        ? Number(raw.priceReductionAmount)
+        : (raw.originalPrice != null && price < Number(raw.originalPrice) ? Number(raw.originalPrice) - price : undefined),
       priceReductionDate: raw.priceReductionDate || undefined,
-      images: Array.isArray(raw.images) && raw.images.length > 0 ? raw.images : [
-        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=1200&q=80',
-      ],
-      features: raw.features || {
-        waterfront: false,
-        pool: false,
-        garage: true,
-      },
+      images,
+      features: raw.features || {},
       priceHistory: Array.isArray(raw.priceHistory) ? raw.priceHistory : [],
       taxHistory: Array.isArray(raw.taxHistory) ? raw.taxHistory : [],
       nearbySchools: Array.isArray(raw.nearbySchools) ? raw.nearbySchools : [],
-      description: raw.description || 'Property details sourced from Zillow MCP.',
-      sourceAttribution: raw.sourceAttribution || 'Zillow MCP Service',
+      description: raw.description || (isMockData ? 'Fixture property record.' : 'Property data provided by the configured real-estate source.'),
+      sourceAttribution: raw.sourceAttribution || (isMockData ? 'Local fixture dataset' : 'Configured real-estate provider'),
       retrievedAt: raw.retrievedAt || new Date().toISOString(),
-      isMockData: Boolean(raw.isMockData),
+      isMockData,
     };
   }
 
@@ -118,11 +124,9 @@ export class MapDataTransformer {
    */
   static clusterProperties(properties: Property[], zoom: number): { clusters: MapCluster[]; unclustered: Property[] } {
     if (zoom >= 15 || properties.length <= 1) {
-      // Zoomed in high detail or single property: show all individual pins
       return { clusters: [], unclustered: properties };
     }
 
-    // Grid size in lat/lng degrees based on zoom level
     const cellSize = 0.08 / Math.pow(2, Math.max(0, zoom - 8));
     const gridMap = new Map<string, Property[]>();
 
@@ -188,7 +192,7 @@ export class MapDataTransformer {
    * Calculates Haversine distance in miles between two coordinates.
    */
   static calculateDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 3958.8; // Earth radius in miles
+    const R = 3958.8;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
     const dLon = ((lon2 - lon1) * Math.PI) / 180;
     const a =

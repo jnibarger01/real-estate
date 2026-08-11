@@ -4,14 +4,11 @@
  */
 
 import React, { useState } from 'react';
-import { 
-  Menu, 
-  Bell, 
-  Search, 
-  SlidersHorizontal, 
-  Database, 
-  Sparkles,
-  MapPin,
+import {
+  Menu,
+  Bell,
+  Search,
+  Database,
   Keyboard
 } from 'lucide-react';
 import kcSkylineImg from '../assets/images/kc_skyline_hero_1786041016879.jpg';
@@ -37,6 +34,7 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
   onSearchSubmit,
 }) => {
   const [searchInput, setSearchInput] = useState('');
+  const isLive = deploymentMode !== 'static' && mcpSource === 'mcp_server';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +45,7 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
 
   return (
     <div className="w-full bg-gradient-to-b from-[#2a0e4e] via-[#370f5e] to-[#1c0836] text-white">
-      {/* Top Navbar */}
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between border-b border-white/10">
-        {/* Left Hamburger */}
         <button
           onClick={onOpenMenu}
           className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-xs"
@@ -58,7 +54,6 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Center Title */}
         <div className="text-center">
           <h1 className="font-bold text-base md:text-lg text-white tracking-tight leading-tight">
             KC Real Estate Market Explorer
@@ -68,20 +63,18 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
           </p>
         </div>
 
-        {/* Right Actions */}
         <div className="flex items-center gap-2">
-          {/* MCP Server Badge */}
           <button
             onClick={onOpenMcpModal}
             className={`hidden sm:flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full uppercase transition-all ${
-              mcpSource === 'mcp_server'
+              isLive
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                 : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
             }`}
-            title="Click to inspect Zillow MCP"
+            title="Inspect property data source"
           >
             <Database className="w-3 h-3" />
-            <span>{deploymentMode === 'static' ? 'Local Dataset' : mcpSource === 'mcp_server' ? 'MCP Connected' : 'Local Adapter'}</span>
+            <span>{deploymentMode === 'static' ? 'Local Dataset' : isLive ? 'Live Data' : 'Local Adapter'}</span>
           </button>
 
           {onOpenShortcutsModal && (
@@ -94,7 +87,6 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
             </button>
           )}
 
-          {/* Bell Notification */}
           <button
             onClick={onOpenMenu}
             className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-xs relative"
@@ -107,9 +99,7 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
         </div>
       </div>
 
-      {/* Hero Banner with Kansas City Skyline Backdrop */}
       <div className="relative max-w-6xl mx-auto px-4 pt-8 pb-12 overflow-hidden flex flex-col items-center text-center min-h-[220px] justify-center">
-        {/* Background Skyline Image with Overlay */}
         <div className="absolute inset-0 z-0">
           <img
             src={kcSkylineImg}
@@ -119,19 +109,19 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
           <div className="absolute inset-0 bg-gradient-to-b from-[#2a0e4e]/80 via-[#370f5e]/70 to-[#1c0836]" />
         </div>
 
-        {/* Content Overlay */}
         <div className="relative z-10 max-w-xl mx-auto space-y-2">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-snug drop-shadow-md">
             Explore Kansas City Housing.
           </h2>
           <p className="text-xs sm:text-sm text-purple-200/90 font-medium tracking-wide">
-            Fixture-backed properties, comparables, mapping, and market analytics.
+            {isLive
+              ? 'Provider-backed sale listings and public-record sales with local comparables and analytics.'
+              : 'Fixture-backed properties, comparables, mapping, and market analytics.'}
           </p>
         </div>
 
-        {/* Floating Search Bar */}
-        <form 
-          onSubmit={handleSubmit} 
+        <form
+          onSubmit={handleSubmit}
           className="relative z-20 w-full max-w-lg mt-6 bg-white rounded-2xl shadow-2xl p-1.5 pl-4 flex items-center justify-between border border-white/20"
         >
           <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
@@ -140,13 +130,22 @@ export const MobileHeroHeader: React.FC<MobileHeroHeaderProps> = ({
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search city, area, or ZIP code"
+              placeholder="Search city/state or ZIP code"
               list="kc-supported-markets"
               className="w-full bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
             />
             <datalist id="kc-supported-markets">
               <option value="Kansas City, MO" />
-              <option value="Overland Park, KS 66204" />
+              <option value="Overland Park, KS" />
+              <option value="Olathe, KS" />
+              <option value="Lenexa, KS" />
+              <option value="Shawnee, KS" />
+              <option value="Leawood, KS" />
+              <option value="Prairie Village, KS" />
+              <option value="Lee's Summit, MO" />
+              <option value="Independence, MO" />
+              <option value="64112" />
+              <option value="66204" />
             </datalist>
           </div>
           <button

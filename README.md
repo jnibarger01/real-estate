@@ -2,132 +2,200 @@
 
 ## Overview
 
-KC Real Estate Market Explorer is a responsive React application for exploring a local Kansas City metro property fixture. It combines an interactive Leaflet map, filtering, property details, comparable-property scoring, and browser-side market analytics. The repository retains an optional Express backend for MCP property providers and server-side Gemini insights.
+KC Real Estate Market Explorer is a responsive React application for exploring Kansas City metro housing data. The frontend is designed to remain on GitHub Pages while an optional HTTPS backend supplies live/provider-backed property data.
 
-The public static demo is designed for GitHub Pages: <https://jnibarger01.github.io/real-estate/>.
-
-## Screenshots / Demo
-
-- Demo: <https://jnibarger01.github.io/real-estate/>
-- The application includes a Kansas City skyline hero, interactive property map, property cards, comparable analysis, and analytics dashboards.
-
-Screenshots can be added here after the first verified public deployment.
-
-## Features
-
-- Kansas City, MO and Overland Park, KS fixture-property search
-- Price, status, property-type, bedroom, bathroom, size, and feature filters
-- Leaflet maps with clustering, density overlays, boundaries, and multiple basemaps
-- Property details, histories, schools, and local comparable-property scoring
-- KPI summaries, distributions, modeled trend charts, and neighborhood comparisons
-- CSV and JSON exports
-- Keyboard-accessible map controls and responsive drawers/navigation
-- Deterministic local market analysis for static hosting
-- Optional Zillow MCP and Gemini integrations through the Express backend
+Public frontend: <https://jnibarger01.github.io/real-estate/>
 
 ## Architecture
 
 ```text
-GitHub Pages                         Full-stack deployment
-React/Vite frontend                  React/Vite frontend
-  ├─ local fixture adapter             └─ Express HTTPS API
-  ├─ browser-side filters                   ├─ Zillow MCP/provider proxy
-  ├─ comparables and analytics              └─ Gemini market insights
-  └─ Leaflet map
+GitHub Pages
+React / Vite frontend
+        |
+        | HTTPS via VITE_API_BASE_URL
+        v
+Standalone Express API (backend.ts)
+        |
+        | server-side X-Api-Key
+        v
+RentCast API
+  ├─ active sale listings
+  ├─ public-record property/sale data
+  └─ ZIP-level market statistics
 ```
 
-`src/config/runtime.ts` is the frontend deployment boundary. A Pages build runs in static mode and does not request local `/api/*` routes. A normal development/full-stack build preserves the existing Express endpoints. `VITE_API_BASE_URL` is optional and can point a future frontend deployment to a separately hosted HTTPS API; it never contains provider credentials.
+If no external API URL is configured, the Pages build continues to use the local fixture adapter. Provider credentials never need to exist in GitHub Pages or browser JavaScript.
 
-## Tech Stack
+## Features
 
-- React 19 and TypeScript
-- Vite 6 and Tailwind CSS 4
-- Leaflet, D3, and Recharts
-- Express
-- Google GenAI SDK (server only)
-- Bun lockfile and package runner
+- Kansas City metro search by city/state or ZIP code
+- Price, status, property-type, bedroom, bathroom, size, and feature filters
+- Leaflet maps with clustering and multiple basemaps
+- Property details and local comparable-property scoring
+- KPI summaries and browser-side analytics
+- Deterministic market analysis when AI is not configured
+- Live provider mode through a separately hosted backend
+- Automatic fixture fallback when the backend is unavailable
+
+## Live Data Provider
+
+The initial live adapter uses RentCast.
+
+Implemented capabilities:
+
+- active for-sale listings via `/v1/listings/sale`;
+- recent public-record sales via `/v1/properties` and `saleDateRange`;
+- property-record lookup by provider ID;
+- ZIP-level market statistics via `/v1/markets`;
+- provider-side filtering for common price/property attributes;
+- five-minute backend response caching by default; and
+- explicit source attribution on normalized records.
+
+Current limitations:
+
+- RentCast exposes `Active` and `Inactive` sale-listing status rather than a distinct pending status, so the first adapter does not claim to provide verified pending listings.
+- Listing photos are not assumed to be available. The UI uses a neutral “No listing photo supplied” placeholder rather than inventing a property photo.
+- AVM/value estimates are not enabled yet. Missing estimates remain missing instead of being synthesized from listing price.
+- This integration is not a direct Heartland MLS feed. A licensed MLS/RESO Web API adapter can be added behind the same backend later.
 
 ## Local Development
 
-Requirements: Bun and a current Node.js-compatible runtime.
+Requirements: Bun and a current Node.js runtime.
+
+Install dependencies:
 
 ```bash
 bun install --frozen-lockfile
+```
+
+Run the original full-stack development server:
+
+```bash
 bun run dev
 ```
 
-The Express server hosts Vite middleware in development at `http://localhost:3000`.
+Run only the standalone live-data backend:
 
-Validation and builds:
+```bash
+cp .env.example .env
+# Add RENTCAST_API_KEY to .env
+bun run dev:backend
+```
+
+Build/verify:
 
 ```bash
 bun run lint
 bun run build
+bun run build:backend
 bun run build:pages
 ```
 
-Copy `.env.example` to `.env` only for optional server-side integrations. Never commit `.env` files.
+## Backend Environment
+
+```dotenv
+RENTCAST_API_KEY="..."
+ALLOWED_ORIGINS="https://jnibarger01.github.io"
+PROVIDER_CACHE_TTL_MS="300000"
+```
+
+`RENTCAST_API_KEY` is a backend-only secret. Do not create a `VITE_RENTCAST_API_KEY` variable and do not put the key in GitHub Pages settings.
+
+## Render Deployment
+
+`render.yaml` defines a standalone Node web service named `kc-real-estate-api`.
+
+On the first Render Blueprint deployment:
+
+1. connect this repository;
+2. create the service from `render.yaml`;
+3. provide `RENTCAST_API_KEY` when Render prompts for the `sync: false` variable;
+4. wait for `/healthz` to report `providerConfigured: true`; and
+5. copy the service's final HTTPS URL.
+
+The backend binds to Render's `PORT` on `0.0.0.0` and exposes:
+
+- `GET /healthz`
+- `GET /api/provider/status`
+- `POST /api/zillow/mcp` — legacy frontend compatibility path backed by the live provider
+- `POST /api/market-insights` — deterministic insight response for the current result set
+
+## Connect GitHub Pages to the Backend
+
+After the backend is deployed, create this **GitHub repository Actions variable**:
+
+```text
+KC_REAL_ESTATE_API_BASE_URL=https://your-backend.example.com
+```
+
+Do not make it a secret; the public backend URL is intentionally shipped to the browser.
+
+`.github/workflows/deploy-pages.yml` passes that value into the Pages build as `VITE_API_BASE_URL`. `src/config/runtime.ts` then switches the Pages bundle from local static mode to the external HTTPS API.
+
+If the variable is empty, Pages remains in fixture mode.
 
 ## GitHub Pages Deployment
 
-`.github/workflows/deploy-pages.yml` runs on pushes to `main` and manual dispatch. It installs from `bun.lock`, typechecks, builds the frontend with `/real-estate/` as its Vite base, scans the compiled output for sensitive server-variable markers, uploads `dist`, and deploys using the official GitHub Pages Actions flow.
+`.github/workflows/deploy-pages.yml` runs on pushes to `main` and manual dispatch. It:
 
-The workflow does not commit `dist` to `main`. In repository settings, configure Pages to use **GitHub Actions** as its source.
+- installs from `bun.lock`;
+- typechecks;
+- builds the frontend with `/real-estate/` as its Vite base;
+- injects only the public API base URL;
+- rejects server-secret markers in compiled output; and
+- deploys through the official GitHub Pages Actions flow.
 
-## Static Demo vs Live Backend
+`.github/workflows/ci.yml` additionally validates pull requests by typechecking and building both the standalone backend and Pages frontend.
 
-Static GitHub Pages mode provides:
+## Data Flow and Fallback
 
-- local fixture property data;
-- browser-side search and filters;
-- browser-side analytics and comparables;
-- interactive mapping using public HTTPS tile services; and
-- deterministic “Local Market Analysis” labeled separately from AI output.
+Live mode:
 
-Full-stack mode can additionally provide:
+```text
+Browser search
+  -> GitHub Pages JavaScript
+  -> HTTPS POST /api/zillow/mcp
+  -> backend cache
+  -> RentCast API
+  -> normalized Property[]
+  -> browser analytics/comparables/map
+```
 
-- Zillow MCP or another external property provider;
-- server-side API proxying;
-- Gemini-generated market insights; and
-- secure server-side credential handling.
+Failure mode:
 
-GitHub Pages cannot execute `server.ts`, Express routes, MCP proxy calls, or Gemini requests. Those capabilities require a separately hosted backend.
+```text
+Backend unavailable / provider key missing / provider error
+  -> client request fails
+  -> existing local fixture adapter is used
+```
 
-## Zillow MCP Integration
+The fallback keeps the application usable, but the UI should be checked for the data-source badge before treating records as live.
 
-The frontend uses `ZillowMcpClient`, which keeps the existing local adapter and can call `/api/zillow/mcp` in full-stack mode. The server reads `ZILLOW_MCP_SERVER_URL` and proxies MCP requests when configured. If no MCP server is configured, the full-stack app also falls back to the local adapter.
+## Security
 
-The Pages build never embeds MCP credentials and does not probe an unavailable Pages API route.
+- `RENTCAST_API_KEY` stays on the backend only.
+- CORS allows the GitHub Pages origin and local development origins by default.
+- Additional origins must be explicitly configured with `ALLOWED_ORIGINS`.
+- The backend disables the Express `X-Powered-By` header and limits JSON request bodies.
+- Compiled Pages output is scanned for secret-variable markers in CI and deployment workflows.
+- `.env*` files remain ignored except for `.env.example`.
 
-## Gemini Integration
+## Existing Full-Stack Integrations
 
-`GEMINI_API_KEY` is read only by `server.ts`. In full-stack mode, `/api/market-insights` can produce Gemini analysis. If Gemini or the backend is unavailable, the frontend presents deterministic local analysis and does not label it as AI-generated.
-
-Do not place Gemini keys in `VITE_*` variables: Vite variables are compiled into browser JavaScript.
-
-## Data Sources
-
-The repository includes local mock/fixture records attributed in the individual data objects. These records power the public demo and are not a live MLS or Zillow feed. Map tiles are requested from configured public Carto, OpenStreetMap, or Esri endpoints with visible attribution.
+The repository still retains `server.ts`, the optional Zillow MCP proxy path, and optional server-side Gemini integration. The new `backend.ts` does not remove those capabilities; it provides a smaller deployable API specifically for the GitHub Pages architecture.
 
 ## Data Limitations
 
-- Fixture records may be stale, synthetic, incomplete, or unsuitable for decisions.
-- The fixture currently supports Kansas City, MO and Overland Park, KS. Unsupported metro cities are not fabricated.
-- Modeled trend charts are exploratory illustrations, not verified historical series.
-- Values are not appraisals, offers, or professional real-estate advice.
-- Public tile availability depends on third-party services and their usage policies.
+- Provider availability and field completeness vary by market and county.
+- Public-record sale data may lag recording/ingestion timelines.
+- Live provider records are not formal appraisals, title reports, or professional real-estate advice.
+- The initial provider is not a direct Heartland MLS feed.
+- Browser-side comparables are analytical matches within the returned dataset, not an appraisal-grade CMA.
 
-## Privacy / Secrets
+## Next Development Targets
 
-- No secret is required for GitHub Pages mode.
-- Never put `GEMINI_API_KEY`, Zillow/MCP credentials, cookies, or private provider URLs in frontend code or `VITE_*` variables.
-- Keep credentials in the separately hosted backend environment.
-- `.env*` files are ignored except for the placeholder `.env.example`.
-
-## Future Development
-
-- Host the Express API on an HTTPS application platform and configure an optional API base URL.
-- Add contract tests for provider adapters and local analysis.
-- Add verified data providers with provenance/freshness metadata.
-- Add automated browser regression and accessibility testing.
-- Add screenshots after public deployment verification.
+- Add a licensed Heartland MLS / RESO Web API provider adapter when credentials are available.
+- Add RentCast AVM/value and rent-estimate endpoints if desired.
+- Add persistent Redis/Postgres caching if traffic outgrows the in-memory cache.
+- Add request throttling and usage telemetry before opening the backend to broader public traffic.
+- Add contract tests with recorded/sanitized provider fixtures.
