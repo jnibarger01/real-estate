@@ -6,6 +6,14 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const PROVIDER_CACHE_TTL_MS = Math.max(60_000, Number(process.env.PROVIDER_CACHE_TTL_MS || 300_000));
+
+interface ProviderCacheEntry {
+  expiresAt: number;
+  data: any;
+}
+
+const providerCache = new Map<string, ProviderCacheEntry>();
 
 const defaultOrigins = [
   'https://jnibarger01.github.io',
@@ -56,6 +64,7 @@ app.get('/api/provider/status', (_req, res) => {
   res.json({
     provider: 'rentcast',
     configured: isRentCastConfigured(),
+    cacheTtlSeconds: Math.round(PROVIDER_CACHE_TTL_MS / 1000),
     capabilities: {
       activeSaleListings: true,
       recentPublicRecordSales: true,
@@ -87,8 +96,26 @@ app.post('/api/zillow/mcp', async (req, res) => {
     return res.status(400).json({ success: false, error: 'toolName is required.' });
   }
 
+  const cacheKey = `${toolName}:${JSON.stringify(params || {})}`;
+  const cached = providerCache.get(cacheKey);
+
   try {
-    const data = await executeRentCastTool(toolName, params || {});
+    let data: any;
+    let cacheStatus = 'MISS';
+
+    if (cached && cached.expiresAt > Date.now()) {
+      data = cached.data;
+      cacheStatus = 'HIT';
+    } else {
+      if (cached) providerCache.delete(cacheKey);
+      data = await executeRentCastTool(toolName, params || {});
+      providerCache.set(cacheKey, {
+        data,
+        expiresAt: Date.now() + PROVIDER_CACHE_TTL_MS,
+      });
+    }
+
+    res.setHeader('X-Provider-Cache', cacheStatus);
     return res.json({
       success: true,
       data,
