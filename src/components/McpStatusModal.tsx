@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Database, X, CheckCircle2, ShieldCheck, RefreshCw, Code, Trash2 } from 'lucide-react';
+import { Database, X, Trash2 } from 'lucide-react';
 import { ZillowMcpClient } from '../services/ZillowMcpClient';
 import { DeploymentMode } from '../config/runtime';
 
@@ -21,14 +21,15 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
   onClose,
   mcpSource,
   deploymentMode,
-  onRefreshData,
 }) => {
   const [testTool, setTestTool] = useState<'zillow_search' | 'zillow_property_details' | 'zillow_comparables' | 'zillow_market_trends'>('zillow_search');
-  const [testLocation, setTestLocation] = useState('Kansas City 64112');
+  const [testLocation, setTestLocation] = useState('Kansas City, MO');
   const [testResult, setTestResult] = useState<any>(null);
   const [isTesting, setIsTesting] = useState(false);
 
   if (!isOpen) return null;
+
+  const isLive = deploymentMode !== 'static' && mcpSource === 'mcp_server';
 
   const handleRunTest = async () => {
     setIsTesting(true);
@@ -48,19 +49,18 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
 
   const handleClearCache = () => {
     ZillowMcpClient.clearCache();
-    alert('Zillow MCP client cache cleared successfully.');
+    alert('Property data client cache cleared successfully.');
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
       <div className="bg-[#f8f7f2] w-full max-w-xl rounded-2xl shadow-2xl border border-[#d6d1c4] overflow-hidden animate-in zoom-in-95 duration-150 text-xs text-[#2d3748]">
-        {/* Header */}
         <div className="bg-[#2d3748] text-white p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-[#d69e2e]" />
             <div>
-              <h2 className="font-semibold text-sm">{deploymentMode === 'static' ? 'Static Market Explorer' : 'Zillow MCP Server & Tool Inspector'}</h2>
-              <p className="text-[10px] text-gray-300">{deploymentMode === 'static' ? 'GitHub Pages deployment status' : 'Model Context Protocol Integration Diagnostics'}</p>
+              <h2 className="font-semibold text-sm">{deploymentMode === 'static' ? 'Static Market Explorer' : 'Property Data Source Inspector'}</h2>
+              <p className="text-[10px] text-gray-300">{deploymentMode === 'static' ? 'GitHub Pages deployment status' : 'Live provider and compatibility-tool diagnostics'}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-300 hover:text-white">
@@ -68,35 +68,35 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
           </button>
         </div>
 
-        {/* Status Overview */}
         <div className="p-5 space-y-4">
           <div className="bg-white p-3.5 rounded-xl border border-[#e5e2d9] space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-gray-700">Active Architecture Status:</span>
               <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                mcpSource === 'mcp_server' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                isLive ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}>
-                {deploymentMode === 'static' ? 'Local Dataset Mode' : mcpSource === 'mcp_server' ? 'External Zillow MCP Server' : 'Integrated Local MCP Adapter Mode'}
+                {deploymentMode === 'static' ? 'Local Dataset Mode' : isLive ? 'Live Provider Backend' : 'Integrated Local Adapter Mode'}
               </span>
             </div>
             <p className="text-[#718096] text-[11px] leading-relaxed">
               {deploymentMode === 'static'
-                ? 'This GitHub Pages build uses local fixture data and browser-side analysis. Live MCP/API connectivity requires a separately hosted HTTPS backend.'
-                : 'When a server-side MCP provider is configured, queries proxy to it. Otherwise, queries use the integrated local adapter.'}
+                ? 'This GitHub Pages build has no external API URL configured, so it uses local fixture data and browser-side analysis.'
+                : isLive
+                  ? 'The browser is connected to the external HTTPS backend. The initial live provider implementation uses RentCast while keeping provider credentials server-side.'
+                  : 'The external backend is unavailable or not configured, so the browser has fallen back to the local fixture adapter.'}
             </p>
           </div>
 
-          {/* Declared Tools Schema List */}
           <div className="space-y-2">
             <h3 className="font-bold uppercase tracking-wider text-gray-500 text-[10px]">
-              Available Zillow MCP Tools Schema
+              Compatibility Tool Contract
             </h3>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               {[
-                { name: 'zillow_search', desc: 'Search properties by city/ZIP/viewport' },
-                { name: 'zillow_property_details', desc: 'Fetch full property details & history' },
-                { name: 'zillow_comparables', desc: 'Identify top comp sales' },
-                { name: 'zillow_market_trends', desc: 'Extract market KPIs & YoY pricing' },
+                { name: 'zillow_search', desc: 'Search live listings/public-record sales' },
+                { name: 'zillow_property_details', desc: 'Fetch a provider property record' },
+                { name: 'zillow_comparables', desc: 'Client-side comp scoring' },
+                { name: 'zillow_market_trends', desc: 'Fetch ZIP-level market statistics' },
               ].map(t => (
                 <div key={t.name} className="bg-white p-2.5 rounded-lg border border-[#e5e2d9]">
                   <div className="font-bold text-[#2b6cb0] font-mono">{t.name}</div>
@@ -106,10 +106,9 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
             </div>
           </div>
 
-          {/* Interactive Tool Tester */}
           {deploymentMode !== 'static' && <div className="bg-white p-3.5 rounded-xl border border-[#e5e2d9] space-y-2">
             <h3 className="font-bold uppercase tracking-wider text-gray-500 text-[10px]">
-              Interactive MCP Dispatch Tester
+              Interactive Provider Dispatch Tester
             </h3>
             <div className="flex gap-2">
               <select
@@ -148,7 +147,6 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
           </div>}
         </div>
 
-        {/* Footer Actions */}
         <div className="p-4 bg-white border-t border-[#d6d1c4] flex items-center justify-between">
           <button
             onClick={handleClearCache}
