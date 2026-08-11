@@ -15,10 +15,19 @@ export class PropertySearchService {
 
     // 1. Text / Location Search
     if (filters.locationQuery && filters.locationQuery.trim()) {
-      const q = filters.locationQuery.toLowerCase().trim();
+      const normalizeLocation = (value: string) => value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      const queries = filters.locationQuery
+        .split('/')
+        .map(normalizeLocation)
+        .filter(Boolean);
       result = result.filter(p => {
-        const addr = `${p.address.street} ${p.address.city} ${p.address.state} ${p.address.zipCode} ${p.address.neighborhood || ''}`.toLowerCase();
-        return addr.includes(q);
+        const addr = normalizeLocation(`${p.address.street} ${p.address.city} ${p.address.state} ${p.address.zipCode} ${p.address.neighborhood || ''}`);
+        return queries.some(query =>
+          query.split(' ').every(token => addr.split(' ').includes(token))
+        );
       });
     }
 

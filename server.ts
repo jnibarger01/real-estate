@@ -16,19 +16,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: '10mb' }));
-
-// Initialize Google GenAI SDK for server-side calls
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
 
 // 1. MCP Streamable HTTP JSON-RPC Protocol Endpoint
 const MCP_TOOLS = [
@@ -309,6 +299,15 @@ app.post('/api/market-insights', async (req, res) => {
         generatedAt: new Date().toISOString(),
       });
     }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
 
     const prompt = `
 You are a senior real estate financial analyst. Analyze the following fetched Zillow market dataset for ${searchRegion || 'the selected location'}:

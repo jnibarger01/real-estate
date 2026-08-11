@@ -25,6 +25,7 @@ interface PropertyResultsPanelProps {
   sortBy: SearchFilters['sortBy'];
   onChangeSortBy: (sort: SearchFilters['sortBy']) => void;
   onSeeAll?: () => void;
+  isLoading?: boolean;
 }
 
 export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
@@ -36,6 +37,7 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
   sortBy,
   onChangeSortBy,
   onSeeAll,
+  isLoading = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'hot' | 'comparables' | 'results'>('hot');
 
@@ -137,6 +139,22 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
         </button>
       </div>
 
+      {isLoading && (
+        <div role="status" aria-live="polite" className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-purple-100 border-t-purple-700" aria-hidden="true" />
+          <p className="mt-3 text-sm font-semibold text-slate-700">Loading Kansas City fixture properties…</p>
+        </div>
+      )}
+
+      {!isLoading && properties.length === 0 && (
+        <div role="status" className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+          <h3 className="text-base font-bold text-slate-900">No fixture properties match these filters</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+            Try Kansas City, MO or Overland Park, KS 66204, or broaden the price and property filters.
+          </p>
+        </div>
+      )}
+
       {/* Tab 1: Featured Hot Opportunities Cards */}
       {activeTab === 'hot' && (
         <AnimatePresence mode="popLayout">
@@ -161,7 +179,16 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ duration: 0.22, delay: idx * 0.04 }}
                   onClick={() => onSelectProperty(p)}
-                  className={`bg-white rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-lg flex flex-col justify-between ${
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelectProperty(p);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open details for ${p.address.street}, ${priceFormatted}`}
+                  className={`bg-white rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-700 focus:ring-offset-2 flex flex-col justify-between ${
                     isSelected ? 'border-[#6b21a8] ring-2 ring-[#6b21a8]/20 shadow-md' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
@@ -220,7 +247,16 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2, delay: idx * 0.03 }}
                   onClick={() => onSelectProperty(p)}
-                  className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md ${
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelectProperty(p);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open comparable property ${p.address.street}`}
+                  className={`bg-white p-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-700 focus:ring-offset-2 ${
                     isSelected ? 'border-[#6b21a8] ring-2 ring-[#6b21a8]/20' : 'border-slate-200'
                   }`}
                 >
@@ -268,7 +304,16 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ duration: 0.22, delay: idx * 0.03 }}
                   onClick={() => onSelectProperty(p)}
-                  className={`bg-white rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-md flex flex-col justify-between ${
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelectProperty(p);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open details for ${p.address.street}, $${p.price.toLocaleString()}`}
+                  className={`bg-white rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-700 focus:ring-offset-2 flex flex-col justify-between ${
                     isSelected ? 'border-[#6b21a8] ring-2 ring-[#6b21a8]/20' : 'border-slate-200'
                   }`}
                 >
