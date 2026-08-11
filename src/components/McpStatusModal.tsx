@@ -1,0 +1,165 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { Database, X, CheckCircle2, ShieldCheck, RefreshCw, Code, Trash2 } from 'lucide-react';
+import { ZillowMcpClient } from '../services/ZillowMcpClient';
+
+interface McpStatusModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  mcpSource: 'mcp_server' | 'mock_adapter';
+  onRefreshData: () => void;
+}
+
+export const McpStatusModal: React.FC<McpStatusModalProps> = ({
+  isOpen,
+  onClose,
+  mcpSource,
+  onRefreshData,
+}) => {
+  if (!isOpen) return null;
+
+  const [testTool, setTestTool] = useState<'zillow_search' | 'zillow_property_details' | 'zillow_comparables' | 'zillow_market_trends'>('zillow_search');
+  const [testLocation, setTestLocation] = useState('Kansas City 64112');
+  const [testResult, setTestResult] = useState<any>(null);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleRunTest = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await ZillowMcpClient.executeTool(testTool, {
+        location: testLocation,
+        zpid: '75482901',
+      });
+      setTestResult(res);
+    } catch (e: any) {
+      setTestResult({ success: false, error: e.message });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleClearCache = () => {
+    ZillowMcpClient.clearCache();
+    alert('Zillow MCP client cache cleared successfully.');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+      <div className="bg-[#f8f7f2] w-full max-w-xl rounded-2xl shadow-2xl border border-[#d6d1c4] overflow-hidden animate-in zoom-in-95 duration-150 text-xs text-[#2d3748]">
+        {/* Header */}
+        <div className="bg-[#2d3748] text-white p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="w-5 h-5 text-[#d69e2e]" />
+            <div>
+              <h2 className="font-semibold text-sm">Zillow MCP Server & Tool Inspector</h2>
+              <p className="text-[10px] text-gray-300">Model Context Protocol Integration Diagnostics</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-300 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Status Overview */}
+        <div className="p-5 space-y-4">
+          <div className="bg-white p-3.5 rounded-xl border border-[#e5e2d9] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-700">Active Architecture Status:</span>
+              <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                mcpSource === 'mcp_server' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              }`}>
+                {mcpSource === 'mcp_server' ? 'External Zillow MCP Server' : 'Integrated Local MCP Adapter Mode'}
+              </span>
+            </div>
+            <p className="text-[#718096] text-[11px] leading-relaxed">
+              When `ZILLOW_MCP_SERVER_URL` environment variable is defined, queries proxy directly to the live Zillow MCP instance. Otherwise, queries fall back seamlessly to the integrated mock adapter.
+            </p>
+          </div>
+
+          {/* Declared Tools Schema List */}
+          <div className="space-y-2">
+            <h3 className="font-bold uppercase tracking-wider text-gray-500 text-[10px]">
+              Available Zillow MCP Tools Schema
+            </h3>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              {[
+                { name: 'zillow_search', desc: 'Search properties by city/ZIP/viewport' },
+                { name: 'zillow_property_details', desc: 'Fetch full property details & history' },
+                { name: 'zillow_comparables', desc: 'Identify top comp sales' },
+                { name: 'zillow_market_trends', desc: 'Extract market KPIs & YoY pricing' },
+              ].map(t => (
+                <div key={t.name} className="bg-white p-2.5 rounded-lg border border-[#e5e2d9]">
+                  <div className="font-bold text-[#2b6cb0] font-mono">{t.name}</div>
+                  <div className="text-gray-500 text-[10px] mt-0.5">{t.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Interactive Tool Tester */}
+          <div className="bg-white p-3.5 rounded-xl border border-[#e5e2d9] space-y-2">
+            <h3 className="font-bold uppercase tracking-wider text-gray-500 text-[10px]">
+              Interactive MCP Dispatch Tester
+            </h3>
+            <div className="flex gap-2">
+              <select
+                value={testTool}
+                onChange={(e) => setTestTool(e.target.value as any)}
+                className="bg-[#f8f7f2] border border-[#d6d1c4] p-1.5 rounded-lg text-xs font-mono"
+              >
+                <option value="zillow_search">zillow_search</option>
+                <option value="zillow_property_details">zillow_property_details</option>
+                <option value="zillow_comparables">zillow_comparables</option>
+                <option value="zillow_market_trends">zillow_market_trends</option>
+              </select>
+
+              <input
+                type="text"
+                value={testLocation}
+                onChange={(e) => setTestLocation(e.target.value)}
+                placeholder="Search Query"
+                className="flex-1 bg-[#f8f7f2] border border-[#d6d1c4] p-1.5 rounded-lg text-xs"
+              />
+
+              <button
+                onClick={handleRunTest}
+                disabled={isTesting}
+                className="bg-[#2b6cb0] text-white px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors hover:bg-[#2c5282]"
+              >
+                {isTesting ? 'Testing...' : 'Execute Tool'}
+              </button>
+            </div>
+
+            {testResult && (
+              <pre className="bg-[#1a202c] text-emerald-400 p-2.5 rounded-lg font-mono text-[10px] max-h-36 overflow-y-auto mt-2">
+                {JSON.stringify(testResult, null, 2)}
+              </pre>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-4 bg-white border-t border-[#d6d1c4] flex items-center justify-between">
+          <button
+            onClick={handleClearCache}
+            className="flex items-center gap-1.5 text-rose-600 hover:text-rose-800 font-semibold text-xs"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Clear Client Cache
+          </button>
+          <button
+            onClick={onClose}
+            className="bg-[#2d3748] text-white px-4 py-2 rounded-xl text-xs font-semibold"
+          >
+            Close Inspector
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

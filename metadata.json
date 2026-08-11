@@ -1,0 +1,6 @@
+{
+  "name": "Real Estate Market Explorer",
+  "description": "Interactive real estate intelligence dashboard connecting to Zillow MCP server for active listings, sales history, price trends, comparables, and AI market insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
