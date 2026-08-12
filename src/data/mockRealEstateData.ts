@@ -666,36 +666,3 @@ export const INITIAL_REAL_ESTATE_PROPERTIES: Property[] = [
     retrievedAt: new Date().toISOString(),
   },
 ];
-
-export const MOCK_NEIGHBORHOOD_BOUNDARIES = [
-  {
-    name: 'Country Club Plaza 64112',
-    coordinates: [
-      [39.0480, -94.5950],
-      [39.0480, -94.5800],
-      [39.0340, -94.5800],
-      [39.0340, -94.5950],
-      [39.0480, -94.5950],
-    ],
-  },
-  {
-    name: 'Overland Park 66204',
-    coordinates: [
-      [38.9950, -94.6820],
-      [38.9950, -94.6600],
-      [38.9750, -94.6600],
-      [38.9750, -94.6820],
-      [38.9950, -94.6820],
-    ],
-  },
-  {
-    name: 'Crossroads Arts District 64108',
-    coordinates: [
-      [39.0950, -94.5910],
-      [39.0950, -94.5800],
-      [39.0820, -94.5800],
-      [39.0820, -94.5910],
-      [39.0950, -94.5910],
-    ],
-  },
-];

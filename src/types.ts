@@ -181,6 +181,7 @@ export interface SavedSearch {
   name: string;
   createdAt: string;
   filters: SearchFilters;
+  alertsEnabled?: boolean;
 }
 
 export interface ChartSeriesDataPoint {

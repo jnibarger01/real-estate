@@ -15,6 +15,9 @@ import {
   Flame,
   ChevronRight
 } from 'lucide-react';
+import { exportPropertiesCSV, exportPropertiesJSON, exportMarketSummary } from '../utils/export';
+import { MarketAnalyticsService } from '../services/MarketAnalyticsService';
+import { propertyPlaceholder } from '../utils/propertyPlaceholder';
 
 interface PropertyResultsPanelProps {
   properties: Property[];
@@ -26,6 +29,8 @@ interface PropertyResultsPanelProps {
   onChangeSortBy: (sort: SearchFilters['sortBy']) => void;
   onSeeAll?: () => void;
   isLoading?: boolean;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
@@ -38,38 +43,12 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
   onChangeSortBy,
   onSeeAll,
   isLoading = false,
+  hasMore = false,
+  onLoadMore,
 }) => {
   const [activeTab, setActiveTab] = useState<'hot' | 'comparables' | 'results'>('hot');
 
-  const handleDownloadCSV = () => {
-    if (!properties || properties.length === 0) return;
-    const headers = [
-      'ZPID', 'Street Address', 'City', 'State', 'Zip Code',
-      'Price ($)', 'Price/SqFt ($)', 'Bedrooms', 'Bathrooms', 'Living SqFt', 'Status'
-    ];
-    const rows = properties.map(p => [
-      p.zpid,
-      `"${(p.address.street || '').replace(/"/g, '""')}"`,
-      `"${(p.address.city || '').replace(/"/g, '""')}"`,
-      p.address.state || '',
-      p.address.zipCode || '',
-      p.price || 0,
-      p.pricePerSqFt || 0,
-      p.bedrooms || 0,
-      p.bathrooms || 0,
-      p.livingAreaSqFt || 0,
-      p.status || ''
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `real_estate_properties_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const handleDownloadCSV = () => exportPropertiesCSV(properties);
 
   return (
     <div className="w-full flex flex-col gap-3">
@@ -137,6 +116,8 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
         >
           <Download className="w-3.5 h-3.5 text-[#6b21a8]" />
         </button>
+        <button onClick={() => exportPropertiesJSON(properties)} disabled={properties.length === 0} className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 disabled:opacity-50" title="Download properties JSON">JSON</button>
+        <button onClick={() => exportMarketSummary(properties, MarketAnalyticsService.calculateMarketSummary(properties))} disabled={properties.length === 0} className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 disabled:opacity-50" title="Download market summary PDF">PDF</button>
       </div>
 
       {isLoading && (
@@ -195,7 +176,7 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
                   {/* Top Image */}
                   <div className="relative w-full h-36 bg-slate-100 overflow-hidden">
                     <img
-                      src={p.images[0]}
+                      src={p.images[0] || propertyPlaceholder(p)}
                       alt={p.address.street}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -318,7 +299,7 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
                   }`}
                 >
                   <div className="relative w-full h-32 bg-slate-100">
-                    <img src={p.images[0]} alt={p.address.street} className="w-full h-full object-cover" />
+                    <img src={p.images[0] || propertyPlaceholder(p)} alt={p.address.street} className="w-full h-full object-cover" />
                   </div>
                   <div className="p-3">
                     <div className="text-sm font-extrabold text-slate-900">${p.price.toLocaleString()}</div>
@@ -331,6 +312,9 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
             })}
           </motion.div>
         </AnimatePresence>
+      )}
+      {hasMore && onLoadMore && (
+        <button onClick={onLoadMore} disabled={isLoading} className="self-center rounded-xl border border-purple-200 bg-white px-4 py-2 text-sm font-semibold text-purple-800 hover:bg-purple-50 disabled:opacity-50">Load more properties</button>
       )}
     </div>
   );
