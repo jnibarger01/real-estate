@@ -1,172 +1,28 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { executeRentCastTool, isRentCastConfigured, RentCastProviderError } from './src/server/rentcast';
+import { LruCache } from './src/server/lruCache';
+import { apiRateLimit, corsAllowList, log, requestId, securityHeaders } from './src/server/httpDefaults';
+import { zillowMcpRequestSchema } from './src/server/validation';
 
 dotenv.config();
+const ttl = Math.max(60_000, Number(process.env.PROVIDER_CACHE_TTL_MS || 300_000));
+const cache = new LruCache<unknown>(Math.max(10, Number(process.env.PROVIDER_CACHE_MAX_ENTRIES || 200)), ttl);
 
-const app = express();
-const PORT = Number(process.env.PORT || 3000);
-const PROVIDER_CACHE_TTL_MS = Math.max(60_000, Number(process.env.PROVIDER_CACHE_TTL_MS || 300_000));
-
-interface ProviderCacheEntry {
-  expiresAt: number;
-  data: any;
+export function createBackendApp() {
+  const app = express(); app.disable('x-powered-by'); app.use(requestId, securityHeaders, express.json({ limit: '1mb' }), corsAllowList());
+  app.get('/healthz', (_req, res) => res.json({ status: 'ok', provider: 'rentcast', providerConfigured: isRentCastConfigured(), timestamp: new Date().toISOString() }));
+  app.get('/api/provider/status', (_req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ provider: 'rentcast', configured: isRentCastConfigured(), cacheTtlSeconds: Math.round(ttl / 1000), capabilities: { activeSaleListings: true, recentPublicRecordSales: true, zipMarketStatistics: true, pendingStatus: false, avm: true }, timestamp: new Date().toISOString() }); });
+  app.post('/api/zillow/mcp', apiRateLimit(), async (req, res) => {
+    const parsed = zillowMcpRequestSchema.safeParse(req.body); if (!parsed.success) return res.status(400).json({ success: false, error: 'Invalid MCP request.', details: parsed.error.issues.map(issue => issue.message), requestId: req.requestId });
+    if (!isRentCastConfigured()) return res.status(503).json({ success: false, provider: 'rentcast', source: 'mock_adapter', error: 'Live provider is not configured on the backend.', requestId: req.requestId, timestamp: new Date().toISOString() });
+    const cacheKey = `${parsed.data.toolName}:${JSON.stringify(parsed.data.params)}`; const cached = cache.get(cacheKey);
+    try { const data = cached ?? await executeRentCastTool(parsed.data.toolName, parsed.data.params); if (!cached) cache.set(cacheKey, data); res.setHeader('X-Provider-Cache', cached ? 'HIT' : 'MISS'); return res.json({ success: true, data, provider: 'rentcast', source: 'mcp_server', timestamp: new Date().toISOString(), requestId: req.requestId }); }
+    catch (error) { const provider = error instanceof RentCastProviderError ? error : new RentCastProviderError('Live property provider request failed.'); log('error', 'provider_request_failed', { requestId: req.requestId, status: provider.statusCode }); return res.status(provider.statusCode).json({ success: false, provider: 'rentcast', source: 'mcp_server', error: provider.message, requestId: req.requestId, timestamp: new Date().toISOString() }); }
+  });
+  app.post('/api/market-insights', apiRateLimit(), (req, res) => { const summary = req.body?.marketSummary || {}; const region = String(req.body?.searchRegion || 'selected area').slice(0, 100); const total = Number(summary.totalProperties || 0); const median = Number(summary.medianListingPrice || 0); res.json({ isAiGenerated: false, executiveSummary: `${region}: ${total} provider-backed records are in the filtered result set${median ? ` with a median asking/sale price of $${median.toLocaleString()}` : ''}.`, verifiedFacts: [`${total} provider-backed records matched the current filters.`], calculatedMetrics: median ? [`Median price: $${median.toLocaleString()}.`] : [], aiInterpretations: [], missingDataNotes: ['This deterministic response is not an appraisal or forecast.', 'Pending-listing status requires a licensed MLS provider.'], predictions: [], generatedAt: new Date().toISOString() }); });
+  return app;
 }
-
-const providerCache = new Map<string, ProviderCacheEntry>();
-
-const defaultOrigins = [
-  'https://jnibarger01.github.io',
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
-const configuredOrigins = String(process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
-const allowedOrigins = new Set([...defaultOrigins, ...configuredOrigins]);
-
-app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  }
-
-  if (req.method === 'OPTIONS') {
-    if (origin && !allowedOrigins.has(origin)) return res.sendStatus(403);
-    return res.sendStatus(204);
-  }
-
-  if (origin && !allowedOrigins.has(origin)) {
-    return res.status(403).json({ success: false, error: 'Origin not allowed.' });
-  }
-
-  next();
-});
-
-app.get('/healthz', (_req, res) => {
-  res.json({
-    status: 'ok',
-    provider: 'rentcast',
-    providerConfigured: isRentCastConfigured(),
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get('/api/provider/status', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.json({
-    provider: 'rentcast',
-    configured: isRentCastConfigured(),
-    cacheTtlSeconds: Math.round(PROVIDER_CACHE_TTL_MS / 1000),
-    capabilities: {
-      activeSaleListings: true,
-      recentPublicRecordSales: true,
-      zipMarketStatistics: true,
-      pendingStatus: false,
-      avm: false,
-    },
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Compatibility endpoint used by the existing GitHub Pages client.
-// Despite the legacy path name, this can now dispatch to a real provider.
-app.post('/api/zillow/mcp', async (req, res) => {
-  res.setHeader('Cache-Control', 'private, max-age=60');
-
-  if (!isRentCastConfigured()) {
-    return res.status(503).json({
-      success: false,
-      provider: 'rentcast',
-      source: 'mock_adapter',
-      error: 'Live provider is not configured on the backend.',
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  const { toolName, params } = req.body || {};
-  if (!toolName || typeof toolName !== 'string') {
-    return res.status(400).json({ success: false, error: 'toolName is required.' });
-  }
-
-  const cacheKey = `${toolName}:${JSON.stringify(params || {})}`;
-  const cached = providerCache.get(cacheKey);
-
-  try {
-    let data: any;
-    let cacheStatus = 'MISS';
-
-    if (cached && cached.expiresAt > Date.now()) {
-      data = cached.data;
-      cacheStatus = 'HIT';
-    } else {
-      if (cached) providerCache.delete(cacheKey);
-      data = await executeRentCastTool(toolName, params || {});
-      providerCache.set(cacheKey, {
-        data,
-        expiresAt: Date.now() + PROVIDER_CACHE_TTL_MS,
-      });
-    }
-
-    res.setHeader('X-Provider-Cache', cacheStatus);
-    return res.json({
-      success: true,
-      data,
-      provider: 'rentcast',
-      source: 'mcp_server',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const providerError = error instanceof RentCastProviderError ? error : null;
-    const status = providerError?.statusCode || 502;
-    console.error('[Live provider request failed]', error);
-    return res.status(status).json({
-      success: false,
-      provider: 'rentcast',
-      source: 'mcp_server',
-      error: providerError?.message || 'Live property provider request failed.',
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
-
-// Keep the existing insights surface usable when Pages points at this backend.
-// This endpoint is deterministic unless a separate AI implementation is added later.
-app.post('/api/market-insights', (req, res) => {
-  const { marketSummary = {}, searchRegion = 'selected area' } = req.body || {};
-  const total = Number(marketSummary.totalProperties || 0);
-  const median = Number(marketSummary.medianListingPrice || 0);
-  const ppsf = Number(marketSummary.medianPricePerSqFt || 0);
-  const dom = Number(marketSummary.avgDaysOnMarket || 0);
-
-  res.json({
-    isAiGenerated: false,
-    executiveSummary: `${searchRegion}: ${total} live/provider-backed records are currently in the filtered result set${median ? ` with a median asking/sale price of $${median.toLocaleString()}` : ''}.`,
-    verifiedFacts: [
-      `${total} provider-backed records matched the current filters.`,
-      ...(median ? [`Median price in the current result set is $${median.toLocaleString()}.`] : []),
-    ],
-    calculatedMetrics: [
-      ...(ppsf ? [`Median price per square foot in the current result set is $${ppsf.toLocaleString()}.`] : []),
-      ...(dom ? [`Average days on market for active records in the current result set is ${dom} days.`] : []),
-    ],
-    aiInterpretations: [],
-    missingDataNotes: [
-      'This backend response is deterministic and is not an appraisal or forecast.',
-      'Pending-listing status is not available from the initial RentCast adapter.',
-    ],
-    predictions: [],
-    generatedAt: new Date().toISOString(),
-  });
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`KC Real Estate live data API listening on 0.0.0.0:${PORT}`);
-});
+const app = createBackendApp();
+if (import.meta.url === `file://${process.argv[1]}`) { const port = Number(process.env.PORT || 3000); app.listen(port, '0.0.0.0', () => log('info', 'backend_started', { port })); }
+export default app;

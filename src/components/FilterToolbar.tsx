@@ -158,6 +158,10 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
     onChangeFilters(saved.filters);
     setIsSavedMenuOpen(false);
   };
+  const toggleAlerts = (saved: SavedSearch, event: React.MouseEvent) => {
+    event.stopPropagation();
+    saveToLocalStorage(savedSearches.map(item => item.id === saved.id ? { ...item, alertsEnabled: !item.alertsEnabled } : item));
+  };
 
   const summarizeFilters = (f: SearchFilters): string => {
     const parts: string[] = [];
@@ -373,6 +377,7 @@ export const FilterToolbar: React.FC<FilterToolbarProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 shrink-0">
+                        <button onClick={(event) => toggleAlerts(item, event)} disabled title="Coming soon — requires a backend notification service" className="text-[10px] font-semibold text-slate-400 bg-white px-2 py-0.5 rounded-md border border-slate-200 cursor-not-allowed">Notify me</button>
                         <span className="text-[10px] font-semibold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 group-hover:border-blue-300">
                           Apply
                         </span>

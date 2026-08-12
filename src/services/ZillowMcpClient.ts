@@ -10,7 +10,7 @@ import {
   SearchFilters, 
   ComparableTolerances 
 } from '../types';
-import { INITIAL_REAL_ESTATE_PROPERTIES } from '../data/mockRealEstateData';
+import { LruCache } from '../server/lruCache';
 import { MapDataTransformer } from './MapDataTransformer';
 import { PropertySearchService } from './PropertySearchService';
 import { PropertyComparisonService } from './PropertyComparisonService';
@@ -18,13 +18,11 @@ import { runtimeConfig } from '../config/runtime';
 
 interface CacheEntry<T> {
   data: T;
-  timestamp: number;
   source: 'mcp_server' | 'mock_adapter';
 }
 
 export class ZillowMcpClient {
-  private static cache = new Map<string, CacheEntry<any>>();
-  private static CACHE_TTL_MS = 5 * 60 * 1000; // 5 minute cache
+  private static cache = new LruCache<CacheEntry<any>>(200, 5 * 60 * 1000);
   private static activeController: AbortController | null = null;
 
   /**
@@ -81,12 +79,12 @@ export class ZillowMcpClient {
     // 2. Cache key check
     const cacheKey = `${toolName}:${JSON.stringify(params)}`;
     const cached = this.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL_MS) {
+    if (cached) {
       return {
         success: true,
         data: cached.data,
         source: cached.source,
-        timestamp: new Date(cached.timestamp).toISOString(),
+        timestamp: new Date().toISOString(),
       };
     }
 
@@ -107,7 +105,7 @@ export class ZillowMcpClient {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
-          this.cache.set(cacheKey, { data: result.data, timestamp: Date.now(), source: result.source || 'mcp_server' });
+          this.cache.set(cacheKey, { data: result.data, source: result.source || 'mcp_server' });
           return result;
         }
       }
@@ -120,8 +118,8 @@ export class ZillowMcpClient {
     }
 
     // 4. Integrated Mock Adapter Execution fallback
-    const fallbackData = this.executeLocalMockAdapter(toolName, params);
-    this.cache.set(cacheKey, { data: fallbackData, timestamp: Date.now(), source: 'mock_adapter' });
+    const fallbackData = await this.executeLocalMockAdapter(toolName, params);
+    this.cache.set(cacheKey, { data: fallbackData, source: 'mock_adapter' });
 
     return {
       success: true,
@@ -134,7 +132,8 @@ export class ZillowMcpClient {
   /**
    * Local MCP mock execution adapter that processes real filters & search parameters.
    */
-  private static executeLocalMockAdapter(toolName: ZillowMcpToolRequest['toolName'], params: Record<string, any>) {
+  private static async executeLocalMockAdapter(toolName: ZillowMcpToolRequest['toolName'], params: Record<string, any>) {
+    const { INITIAL_REAL_ESTATE_PROPERTIES } = await import('../data/mockRealEstateData');
     switch (toolName) {
       case 'zillow_search': {
         const filters: SearchFilters = params.filters || {

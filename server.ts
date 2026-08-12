@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
+import { executeRentCastTool, isRentCastConfigured, RentCastProviderError } from './src/server/rentcast';
+import { apiRateLimit, corsAllowList, log, requestId, securityHeaders } from './src/server/httpDefaults';
 
 dotenv.config();
 
@@ -19,6 +21,8 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: '10mb' }));
+app.disable('x-powered-by');
+app.use(requestId, securityHeaders, corsAllowList());
 
 // 1. MCP Streamable HTTP JSON-RPC Protocol Endpoint
 const MCP_TOOLS = [
@@ -126,7 +130,7 @@ const MCP_RESOURCES = [
 ];
 
 // MCP JSON-RPC Handler function
-function handleMcpJsonRpc(body: any) {
+async function handleMcpJsonRpc(body: any) {
   const { jsonrpc, method, params, id } = body || {};
 
   if (method === 'initialize') {
@@ -189,7 +193,21 @@ function handleMcpJsonRpc(body: any) {
   if (method === 'tools/call') {
     const name = params?.name;
     const args = params?.arguments || {};
-
+    const toolMap: Record<string, string> = {
+      search_properties: 'zillow_search', get_property: 'zillow_property_details',
+      get_recent_sales: 'zillow_search', get_market_summary: 'zillow_market_trends',
+      get_market_trends: 'zillow_market_trends',
+    };
+    if (isRentCastConfigured() && toolMap[name]) {
+      try {
+        const mappedArgs = name === 'get_recent_sales' ? { ...args, filters: { ...(args.filters || {}), status: ['recently_sold'] } } : args;
+        const data = await executeRentCastTool(toolMap[name], mappedArgs);
+        return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify({ status: 'success', tool: name, provider: 'rentcast', data }) }] } };
+      } catch (error) {
+        const provider = error instanceof RentCastProviderError ? error : new RentCastProviderError('Live property provider request failed.');
+        return { jsonrpc: '2.0', id, error: { code: -32000, message: provider.message, data: { status: provider.statusCode } } };
+      }
+    }
     return {
       jsonrpc: '2.0',
       id,
@@ -216,13 +234,13 @@ function handleMcpJsonRpc(body: any) {
 }
 
 // Handler endpoints for /mcp and /api/mcp
-app.post(['/mcp', '/api/mcp'], (req, res) => {
-  const response = handleMcpJsonRpc(req.body);
+app.post(['/mcp', '/api/mcp'], apiRateLimit(), async (req, res) => {
+  const response = await handleMcpJsonRpc(req.body);
   res.json(response);
 });
 
 // Zillow MCP Client UI Proxy Endpoint
-app.post('/api/zillow/mcp', async (req, res) => {
+app.post('/api/zillow/mcp', apiRateLimit(), async (req, res) => {
   try {
     const { toolName, params } = req.body;
     const mcpServerUrl = process.env.ZILLOW_MCP_SERVER_URL;
