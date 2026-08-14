@@ -6,9 +6,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import 'leaflet-draw';
 import { Property, MapViewport } from '../types';
 import { MapDataTransformer, MapCluster } from '../services/MapDataTransformer';
-import { MOCK_NEIGHBORHOOD_BOUNDARIES } from '../data/mockRealEstateData';
+import { MOCK_NEIGHBORHOOD_BOUNDARIES } from '../data/neighborhoodBoundaries';
+import { exportPropertiesCSV, exportPropertiesJSON } from '../utils/export';
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -37,6 +40,7 @@ interface MapSectionProps {
   selectedProperty: Property | null;
   onSelectProperty: (p: Property) => void;
   onViewportChange?: (viewport: MapViewport) => void;
+  onPolygonDrawn?: (polygon: { lat: number; lng: number }[]) => void;
   medianPrice: number;
 }
 
@@ -45,6 +49,7 @@ export const MapSection: React.FC<MapSectionProps> = ({
   selectedProperty,
   onSelectProperty,
   onViewportChange,
+  onPolygonDrawn,
   medianPrice,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -63,52 +68,8 @@ export const MapSection: React.FC<MapSectionProps> = ({
   const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
   const [isLegendExpanded, setIsLegendExpanded] = useState<boolean>(true);
 
-  const handleExportCSV = () => {
-    if (!properties || properties.length === 0) return;
-    const headers = [
-      'ZPID', 'Street Address', 'City', 'State', 'Zip Code', 
-      'Price ($)', 'Bedrooms', 'Bathrooms', 'SqFt', 'Price/SqFt ($)', 
-      'Status', 'Property Type', 'Latitude', 'Longitude'
-    ];
-    const rows = properties.map(p => [
-      p.zpid,
-      `"${(p.address.street || '').replace(/"/g, '""')}"`,
-      `"${(p.address.city || '').replace(/"/g, '""')}"`,
-      p.address.state || '',
-      p.address.zipCode || '',
-      p.price || 0,
-      p.bedrooms || 0,
-      p.bathrooms || 0,
-      p.livingAreaSqFt || 0,
-      p.pricePerSqFt || 0,
-      p.status || '',
-      p.propertyType || '',
-      p.address.lat,
-      p.address.lng
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `kansas_city_properties_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleExportJSON = () => {
-    if (!properties || properties.length === 0) return;
-    const jsonContent = JSON.stringify(properties, null, 2);
-    const blob = new Blob([jsonContent], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `kansas_city_properties_${new Date().toISOString().slice(0,10)}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const handleExportCSV = () => exportPropertiesCSV(properties);
+  const handleExportJSON = () => exportPropertiesJSON(properties);
 
   // Default initial center: Kansas City / Overland Park Metro area
   const initialCenter: [number, number] = properties.length > 0 
@@ -152,6 +113,14 @@ export const MapSection: React.FC<MapSectionProps> = ({
     heatmapGroupRef.current = L.layerGroup().addTo(map);
     polygonGroupRef.current = L.layerGroup().addTo(map);
     layerGroupRef.current = L.layerGroup().addTo(map);
+    const drawn = new L.FeatureGroup().addTo(map);
+    const drawControl = new L.Control.Draw({ edit: { featureGroup: drawn }, draw: { polygon: {}, polyline: false, rectangle: false, circle: false, marker: false, circlemarker: false } });
+    map.addControl(drawControl);
+    map.on(L.Draw.Event.CREATED, (event: L.DrawEvents.Created) => {
+      drawn.clearLayers(); drawn.addLayer(event.layer);
+      const points = (event.layer as L.Polygon).getLatLngs()[0] as L.LatLng[];
+      onPolygonDrawn?.(points.map(point => ({ lat: point.lat, lng: point.lng })));
+    });
 
     // Event listeners
     map.on('zoomend', () => {
@@ -169,7 +138,7 @@ export const MapSection: React.FC<MapSectionProps> = ({
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [onPolygonDrawn]);
 
   const emitViewportChange = () => {
     if (!mapRef.current || !onViewportChange) return;

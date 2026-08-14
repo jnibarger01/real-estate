@@ -51,6 +51,7 @@ const DEFAULT_TOLERANCES: ComparableTolerances = {
   saleRecencyMonths: 24,
   bedBathVariance: 2,
 };
+const TOLERANCES_STORAGE_KEY = 'real_estate_comparable_tolerances_v1';
 
 export default function App() {
   // Application State
@@ -75,7 +76,11 @@ export default function App() {
     priceTrendPct: 0,
   });
 
-  const [tolerances, setTolerances] = useState<ComparableTolerances>(DEFAULT_TOLERANCES);
+  const [tolerances, setTolerances] = useState<ComparableTolerances>(() => {
+    try { return { ...DEFAULT_TOLERANCES, ...JSON.parse(localStorage.getItem(TOLERANCES_STORAGE_KEY) || '{}') }; } catch { return DEFAULT_TOLERANCES; }
+  });
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [insights, setInsights] = useState<MarketInsightResponse | null>(null);
   const [mcpSource, setMcpSource] = useState<'mcp_server' | 'mock_adapter'>('mock_adapter');
   const [isInsightsLoading, setIsInsightsLoading] = useState<boolean>(false);
@@ -98,6 +103,8 @@ export default function App() {
     setFilters(DEFAULT_FILTERS);
     setTolerances(DEFAULT_TOLERANCES);
   }, []);
+
+  useEffect(() => { try { localStorage.setItem(TOLERANCES_STORAGE_KEY, JSON.stringify(tolerances)); } catch { /* local storage is optional */ } }, [tolerances]);
 
   // Global Keyboard Shortcuts Listener
   useEffect(() => {
@@ -162,7 +169,7 @@ export default function App() {
   }, [handleResetFilters]);
 
   // Fetch Zillow MCP Data
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (offset = 0, append = false) => {
     setLoadError(null);
     setIsDataLoading(true);
     try {
@@ -172,6 +179,7 @@ export default function App() {
         status: filters.status,
         propertyTypes: filters.propertyTypes,
         filters,
+        offset,
       });
 
       if (response.data?.properties) {
@@ -179,7 +187,9 @@ export default function App() {
           MapDataTransformer.normalizePropertyData(p)
         );
 
-        setProperties(fetchedProps);
+        setProperties(previous => append ? [...new Map([...previous, ...fetchedProps].map(property => [property.id, property])).values()] : fetchedProps);
+        setHasMore(Boolean(response.data.hasMore));
+        setNextOffset(typeof response.data.nextOffset === 'number' ? response.data.nextOffset : null);
         setMcpSource(response.source);
 
         const summary = MarketAnalyticsService.calculateMarketSummary(fetchedProps);
@@ -317,6 +327,8 @@ export default function App() {
             selectedProperty={selectedProperty}
             onSelectProperty={(p) => setSelectedProperty(p)}
             medianPrice={marketSummary.medianListingPrice}
+            onPolygonDrawn={(polygonBounds) => handleFilterChange({ polygonBounds })}
+            onViewportChange={(viewport) => handleFilterChange({ viewport })}
           />
         </section>
 
@@ -332,6 +344,8 @@ export default function App() {
             onChangeSortBy={(sort) => handleFilterChange({ sortBy: sort })}
             onSeeAll={() => setIsFilterDrawerOpen(true)}
             isLoading={isDataLoading}
+            hasMore={hasMore}
+            onLoadMore={nextOffset == null ? undefined : () => loadData(nextOffset, true)}
           />
         </section>
 

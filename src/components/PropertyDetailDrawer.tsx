@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Property } from '../types';
 import { DeploymentMode } from '../config/runtime';
 import { PriceHistoryD3Chart } from './PriceHistoryD3Chart';
+import { propertyPlaceholder } from '../utils/propertyPlaceholder';
 import { 
   X, 
   MapPin, 
@@ -93,7 +94,7 @@ export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
           <div className="space-y-2">
             <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-100 shadow-sm relative">
               <img
-                src={property.images[activeImageIdx] || property.images[0]}
+                src={property.images[activeImageIdx] || property.images[0] || propertyPlaceholder(property)}
                 alt={property.address.street}
                 className="w-full h-full object-cover"
               />

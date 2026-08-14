@@ -10,6 +10,8 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
+import { executeRentCastTool, isRentCastConfigured, RentCastProviderError } from './src/server/rentcast';
+import { apiRateLimit, corsAllowList, log, requestId, securityHeaders } from './src/server/httpDefaults';
 import { pool } from './src/api/db/pool.js';
 import dashboardRouter from './src/api/routes/dashboard.js';
 
@@ -22,6 +24,9 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json({ limit: '10mb' }));
+app.disable('x-powered-by');
+app.use(requestId, securityHeaders, corsAllowList());
+
 
 const authUser = process.env.DASHBOARD_AUTH_USER;
 const authPassword = process.env.DASHBOARD_AUTH_PASSWORD;
@@ -29,70 +34,38 @@ const authPassword = process.env.DASHBOARD_AUTH_PASSWORD;
 function constantTimeEqual(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
-  return leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 const dashboardAuth: RequestHandler = (req, res, next) => {
   if (!authUser || !authPassword) return next();
-
   const authorization = req.get('authorization');
-
   if (authorization?.startsWith('Basic ')) {
-    const decoded = Buffer.from(
-      authorization.slice(6),
-      'base64'
-    ).toString('utf8');
-
+    const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
     const separator = decoded.indexOf(':');
-
     if (separator >= 0) {
       const username = decoded.slice(0, separator);
       const password = decoded.slice(separator + 1);
-
-      if (
-        constantTimeEqual(username, authUser) &&
-        constantTimeEqual(password, authPassword)
-      ) {
-        return next();
-      }
+      if (constantTimeEqual(username, authUser) && constantTimeEqual(password, authPassword)) return next();
     }
   }
-
-  res.set(
-    'WWW-Authenticate',
-    'Basic realm="Jackson County Property Intelligence"'
-  );
-
+  res.set('WWW-Authenticate', 'Basic realm="Jackson County Property Intelligence"');
   return res.status(401).send('Authentication required');
 };
 
 app.get('/api/health', async (_req, res) => {
   try {
     const { rows } = await pool.query('SELECT 1 AS ok');
-
-    res.json({
-      ok: true,
-      db: rows[0]?.ok === 1 ? 'connected' : 'unavailable',
-      time: new Date().toISOString(),
-    });
-  } catch (error: any) {
-    res.status(503).json({
-      ok: false,
-      db: 'error',
-      detail: error.message,
-    });
+    return res.json({ ok: true, db: rows[0]?.ok === 1 ? 'connected' : 'unavailable', time: new Date().toISOString() });
+  } catch (error) {
+    console.error('Dashboard health check failed:', error);
+    return res.status(503).json({ ok: false, db: 'error', error: 'health_check_failed' });
   }
 });
 
-app.use('/api', dashboardAuth, dashboardRouter);
-
-// Protect the dashboard UI and its Vite/static assets when credentials are configured.
-// /mcp and /api/mcp are a separate integration surface and keep their existing behavior.
-app.use((req, res, next) => {
-  if (req.path === '/mcp' || req.path === '/api/mcp') return next();
-  return dashboardAuth(req, res, next);
-});
+// Gate only the PostgreSQL dashboard API surface. Existing MCP/RentCast endpoints remain unchanged.
+app.use(['/api/dashboard', '/api/properties/search', '/api/map'], dashboardAuth);
+app.use('/api', dashboardRouter);
 
 // 1. MCP Streamable HTTP JSON-RPC Protocol Endpoint
 const MCP_TOOLS = [
@@ -200,7 +173,7 @@ const MCP_RESOURCES = [
 ];
 
 // MCP JSON-RPC Handler function
-function handleMcpJsonRpc(body: any) {
+async function handleMcpJsonRpc(body: any) {
   const { jsonrpc, method, params, id } = body || {};
 
   if (method === 'initialize') {
@@ -263,7 +236,21 @@ function handleMcpJsonRpc(body: any) {
   if (method === 'tools/call') {
     const name = params?.name;
     const args = params?.arguments || {};
-
+    const toolMap: Record<string, string> = {
+      search_properties: 'zillow_search', get_property: 'zillow_property_details',
+      get_recent_sales: 'zillow_search', get_market_summary: 'zillow_market_trends',
+      get_market_trends: 'zillow_market_trends',
+    };
+    if (isRentCastConfigured() && toolMap[name]) {
+      try {
+        const mappedArgs = name === 'get_recent_sales' ? { ...args, filters: { ...(args.filters || {}), status: ['recently_sold'] } } : args;
+        const data = await executeRentCastTool(toolMap[name], mappedArgs);
+        return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify({ status: 'success', tool: name, provider: 'rentcast', data }) }] } };
+      } catch (error) {
+        const provider = error instanceof RentCastProviderError ? error : new RentCastProviderError('Live property provider request failed.');
+        return { jsonrpc: '2.0', id, error: { code: -32000, message: provider.message, data: { status: provider.statusCode } } };
+      }
+    }
     return {
       jsonrpc: '2.0',
       id,
@@ -290,13 +277,13 @@ function handleMcpJsonRpc(body: any) {
 }
 
 // Handler endpoints for /mcp and /api/mcp
-app.post(['/mcp', '/api/mcp'], (req, res) => {
-  const response = handleMcpJsonRpc(req.body);
+app.post(['/mcp', '/api/mcp'], apiRateLimit(), async (req, res) => {
+  const response = await handleMcpJsonRpc(req.body);
   res.json(response);
 });
 
 // Zillow MCP Client UI Proxy Endpoint
-app.post('/api/zillow/mcp', async (req, res) => {
+app.post('/api/zillow/mcp', apiRateLimit(), async (req, res) => {
   try {
     const { toolName, params } = req.body;
     const mcpServerUrl = process.env.ZILLOW_MCP_SERVER_URL;
@@ -462,6 +449,12 @@ app.get('/api/mcp/status', (req, res) => {
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Protect the dashboard UI and its Vite/static assets when credentials are configured.
+app.use((req, res, next) => {
+  if (req.path === '/mcp' || req.path === '/api/mcp' || req.path.startsWith('/api/')) return next();
+  return dashboardAuth(req, res, next);
 });
 
 // Vite or static serving

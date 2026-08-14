@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck
         run: bun run lint
 
+      - name: Test
+        run: bun run test
+
       - name: Build standalone backend
         run: bun run build:backend
 
@@ -40,5 +43,9 @@ jobs:
         run: |
           if grep -R -E 'GEMINI_API_KEY|RENTCAST_API_KEY|ZILLOW_MCP_SERVER_URL|PRIVATE KEY-----' dist; then
             echo 'Potential secret material found in dist.' >&2
+            exit 1
+          fi
+          if grep -R -E '(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|(api[_-]?key|secret|token)["'"'"'= :]+[A-Za-z0-9_-]{32,})' dist; then
+            echo 'Potential shaped secret material found in dist.' >&2
             exit 1
           fi

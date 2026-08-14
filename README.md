@@ -41,6 +41,10 @@ If no external API URL is configured, the Pages build continues to use the local
 
 The initial live adapter uses RentCast.
 
+### Known data gaps
+
+Pending MLS status, provider listing photos, and saved-search notifications are intentionally not represented as live features. Pending status needs licensed RESO/Bridge MLS access, photos need a licensed media provider, and alerts need a durable backend notification service. This repository contains extension points only; it does not fabricate those data sources.
+
 Implemented capabilities:
 
 - active for-sale listings via `/v1/listings/sale`;
