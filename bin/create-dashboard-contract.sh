@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
+# Apply the canonical api.dashboard_* contract to a Postgres/PostGIS database.
+# Usage: bin/create-dashboard-contract.sh
+# Env: PGDATABASE (default jacen_dev), PGHOST, PGUSER, PGPASSWORD, DATABASE_URL
 set -euo pipefail
 
-DB="${PGDATABASE:-jacen_dev}"
-PGHOST="${PGHOST:-/var/run/postgresql}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SQL="$ROOT/sql/api_dashboard_views.sql"
 
-echo "==> Creating dashboard contract views in $DB (schema: dashboard)"
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1)
+  TARGET="$DATABASE_URL"
+else
+  DB="${PGDATABASE:-jacen_dev}"
+  PSQL=(psql -d "$DB" -v ON_ERROR_STOP=1)
+  TARGET="$DB"
+fi
 
-psql -q -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS dashboard;" 2>/dev/null || true
+echo "==> Applying api.dashboard_* contract to $TARGET"
+"${PSQL[@]}" -f "$SQL"
 
-psql -q -v ON_ERROR_STOP=1 -f "$(dirname "$0")/sql/dashboard_contract_views.sql"
-
-echo "==> Verifying contract views"
-psql -q -c "
-  SELECT schemaname, tablename, viewdefinition IS NOT NULL AS is_view
-  FROM pg_catalog.pg_views
-  WHERE schemaname = 'dashboard'
-  ORDER BY tablename;
+echo "==> Verifying api.dashboard_* views"
+"${PSQL[@]}" -c "
+  SELECT n.nspname AS schema, c.relname AS name, c.relkind
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'api'
+    AND c.relkind IN ('v', 'm', 'r')
+  ORDER BY c.relname;
 "

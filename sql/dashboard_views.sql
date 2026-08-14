@@ -1,3 +1,5 @@
+-- DEPRECATED. Do not apply. Canonical contract is sql/api_dashboard_views.sql
+-- (api.dashboard_*). mart.dashboard_* is not read by the running API.
 -- Dashboard contract views. All dashboard endpoints read only from these.
 CREATE SCHEMA IF NOT EXISTS mart;
 

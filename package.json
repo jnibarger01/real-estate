@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "jackson-county-dashboard",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,8 +13,18 @@
     "start:backend": "node dist/backend.js",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run && tsx --test --test-timeout=120000 tests/api.integration.test.ts",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "db:contract": "bin/create-dashboard-contract.sh",
+    "test:watch": "vitest",
+    "db:views": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/api_dashboard_views.sql",
+    "db:indexes": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/spatial_indexes.sql",
+    "db:promote": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/promote_raw_to_mart.sql",
+    "db:refresh": "db/refresh_materialized.sh",
+    "db:backup": "scripts/backup-postgres.sh",
+    "ops:health": "scripts/check-health.sh",
+    "ops:loadtest": "node scripts/loadtest-search.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -46,6 +56,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/d3": "^7.4.3",
     "@types/express": "^4.17.21",
     "@types/leaflet-draw": "^1.0.13",

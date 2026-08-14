@@ -35,7 +35,7 @@ test('POST /mcp reaches the MCP JSON-RPC handler before Vite middleware', async 
     const body = await response.json();
     assert.equal(body.jsonrpc, '2.0');
     assert.equal(body.id, 1);
-    assert.equal(body.result?.serverInfo?.name, 'zillow-mcp');
+    assert.equal(body.result?.serverInfo?.name, 'jackson-county-dashboard');
   } finally {
     child.kill('SIGTERM');
   }

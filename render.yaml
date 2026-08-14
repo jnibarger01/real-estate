@@ -1,15 +1,33 @@
 services:
   - type: web
-    name: kc-real-estate-api
+    name: jackson-county-dashboard
     runtime: node
-    plan: free
-    buildCommand: bun install --frozen-lockfile && bun run build:backend
-    startCommand: bun run start:backend
-    healthCheckPath: /healthz
+    plan: starter
+    buildCommand: bun install --frozen-lockfile && bun run db:indexes || true && bun run build
+    startCommand: bun run start
+    healthCheckPath: /api/health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: NODE_VERSION
         value: "22"
-      - key: RENTCAST_API_KEY
+      - key: ENABLE_MCP
+        value: "false"
+      - key: INGEST_MAX_AGE_HOURS
+        value: "168"
+      - key: REQUIRE_DASHBOARD_APP_ROLE
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: DASHBOARD_AUTH_USERS
+        sync: false
+      - key: DASHBOARD_AUTH_USER
+        sync: false
+      - key: DASHBOARD_AUTH_PASSWORD
+        sync: false
+      - key: API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         value: https://jnibarger01.github.io
+      - key: RENTCAST_API_KEY
+        sync: false

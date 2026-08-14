@@ -6,4 +6,10 @@ describe('backend API', () => {
   it('reports health and honest provider capability status', async () => { expect((await request(app).get('/healthz')).status).toBe(200); const status = await request(app).get('/api/provider/status'); expect(status.body.capabilities.pendingStatus).toBe(false); expect(status.body.capabilities.avm).toBe(true); });
   it('rejects malformed MCP requests', async () => { const response = await request(app).post('/api/zillow/mcp').send({ toolName: 'not-a-tool' }); expect(response.status).toBe(400); expect(response.headers['x-request-id']).toBeTruthy(); });
   it('does not pretend an unconfigured provider is available', async () => { const response = await request(app).post('/api/zillow/mcp').send({ toolName: 'zillow_search', params: { location: 'Kansas City, MO' } }); expect(response.status).toBe(503); });
+  it('allows same-origin module requests and rejects unknown origins', async () => {
+    const same = await request(app).get('/api/health').set('Host', '127.0.0.1:3310').set('Origin', 'http://127.0.0.1:3310');
+    expect(same.status).toBe(200);
+    const unknown = await request(app).get('/api/health').set('Origin', 'https://evil.example');
+    expect(unknown.status).toBe(403);
+  });
 });

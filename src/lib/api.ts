@@ -6,6 +6,7 @@
  * talks to Postgres directly — everything goes through these routes.
  */
 
+import type { Geometry } from 'geojson';
 import { runtimeConfig } from '../config/runtime';
 
 export interface DashboardSummary {
@@ -22,6 +23,10 @@ export interface DashboardSummary {
   under_1m: number | string;
   over_1m: number | string;
   yoy_value_change_pct: number | null;
+  yoy_from_year: number | null;
+  yoy_to_year: number | null;
+  queried_at?: string;
+  refreshed_at?: string | null;
 }
 
 export interface ValueDistributionDatum {
@@ -83,6 +88,8 @@ export interface PropertySearchResponse {
 export interface SearchFilters {
   q?: string;
   city?: string;
+  owner?: string;
+  parcel?: string;
   landuse?: string;
   minValue?: number;
   maxValue?: number;
@@ -90,9 +97,22 @@ export interface SearchFilters {
   maxBeds?: number;
   minSqft?: number;
   maxSqft?: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
 }
+
+export interface PropertyDetail {
+  property_id: number;
+  assessment: Record<string, unknown>;
+  parcel: Record<string, unknown>;
+  ownership: { owner_info: string | null; owner_mailing_address: string | null };
+  geometry: { lng: number | null; lat: number | null; centroid: unknown };
+  parcels: Array<{ parcel_id: string; parcel_number: string | null }>;
+}
+
+export type GeoJsonGeometry = Geometry;
 
 export interface MapFeatureCollection {
   type: 'FeatureCollection';
@@ -103,7 +123,7 @@ export interface MapFeatureCollection {
       property_id: number;
       market_value_total: number;
     };
-    geometry: any;
+    geometry: GeoJsonGeometry;
   }>;
   total: number;
   limit: number;
@@ -116,15 +136,30 @@ export interface MapSummaryDatum {
   property_count: number;
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+export function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 async function request<T>(path: string, query?: Record<string, string | number | undefined>): Promise<T> {
   const url = new URL(runtimeConfig.apiUrl(path), window.location.origin);
   for (const [k, v] of Object.entries(query ?? {})) {
     if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
   }
-  const res = await fetch(url.toString());
+  const headers: HeadersInit = {};
+  if (runtimeConfig.apiKey) headers['x-api-key'] = runtimeConfig.apiKey;
+  const res = await fetch(url.toString(), { headers, credentials: 'same-origin' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.message || body?.error || `Request failed (${res.status})`);
+    throw new ApiError(body?.message || body?.error || `Request failed (${res.status})`, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -139,9 +174,14 @@ export const api = {
   valueDistribution: () => request<ValueDistributionDatum[]>('/api/dashboard/value-distribution'),
   salesTrends: () => request<SalesTrendDatum[]>('/api/dashboard/sales-trends'),
   propertyTypes: () => request<PropertyTypeDatum[]>('/api/dashboard/property-types'),
+  distributions: (dimension: 'property_type' | 'value_band' | 'assessment_class' = 'property_type') =>
+    request<{ dimension: string; items: PropertyTypeDatum[] }>('/api/dashboard/distributions', { dimension }),
   searchProperties: (filters: SearchFilters) => request<PropertySearchResponse>('/api/properties/search', { ...filters }),
-  mapProperties: (bbox: [number, number, number, number], limit = 8000) =>
-    request<MapFeatureCollection>('/api/map/properties', { bbox: bbox.join(','), limit }),
+  getProperty: (id: number) => request<PropertyDetail>(`/api/properties/${id}`),
+  marketTrends: () => request<{ series: SalesTrendDatum[]; semantics: string }>('/api/market/trends'),
+  sales: (q?: string) => request<{ results: unknown[]; semantics: string; note: string }>('/api/sales', { q, limit: 25 }),
+  mapProperties: (bbox: [number, number, number, number], limit?: number, zoom?: number) =>
+    request<MapFeatureCollection>('/api/map/properties', { bbox: bbox.join(','), limit, zoom }),
   mapSummary: (bbox: [number, number, number, number]) =>
     request<MapSummaryDatum[]>('/api/map/summary', { bbox: bbox.join(',') }),
 };

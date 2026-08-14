@@ -1,213 +1,123 @@
-# KC Real Estate Market Explorer
+# Jackson County Property Intelligence
 
-## Overview
+Canonical product: a Jackson County assessor dashboard over Postgres/PostGIS.
 
-KC Real Estate Market Explorer is a responsive React application for exploring Kansas City metro housing data. The frontend is designed to remain on GitHub Pages while an optional HTTPS backend supplies live/provider-backed property data.
+Authenticated product (owner PII):
+
+```text
+browser
+        │
+        ▼
+same-origin SPA + API   (`bun run build && bun run start`)
+        │
+        ▼
+createApp() + Postgres/PostGIS + api.dashboard_*
+```
+
+GitHub Pages is a public static shell only. It must not carry `VITE_API_KEY` and is not an authenticated PII deployment.
+   ├── /api/dashboard/*
+   ├── /api/properties/*
+   ├── /api/map/*
+   ├── /api/health
+   ├── /mcp
+   └── /api/provider/*   ← RentCast, secondary
+        │
+        ▼
+Postgres/PostGIS
+api.dashboard_*
+```
+
+`src/main.tsx` mounts `DashboardApp` only. `server.ts` and `backend.ts` both start `createApp()`. RentCast is not the production data path.
 
 Public frontend: <https://jnibarger01.github.io/real-estate/>
 
-## Architecture
+## Local development
 
-```text
-GitHub Pages
-React / Vite frontend
-        |
-        | HTTPS via VITE_API_BASE_URL
-        v
-Standalone Express API (backend.ts)
-        |
-        | server-side X-Api-Key
-        v
-RentCast API
-  ├─ active sale listings
-  ├─ public-record property/sale data
-  └─ ZIP-level market statistics
-```
-
-If no external API URL is configured, the Pages build continues to use the local fixture adapter. Provider credentials never need to exist in GitHub Pages or browser JavaScript.
-
-## Features
-
-- Kansas City metro search by city/state or ZIP code
-- Price, status, property-type, bedroom, bathroom, size, and feature filters
-- Leaflet maps with clustering and multiple basemaps
-- Property details and local comparable-property scoring
-- KPI summaries and browser-side analytics
-- Deterministic market analysis when AI is not configured
-- Live provider mode through a separately hosted backend
-- Automatic fixture fallback when the backend is unavailable
-
-## Live Data Provider
-
-The initial live adapter uses RentCast.
-
-### Known data gaps
-
-Pending MLS status, provider listing photos, and saved-search notifications are intentionally not represented as live features. Pending status needs licensed RESO/Bridge MLS access, photos need a licensed media provider, and alerts need a durable backend notification service. This repository contains extension points only; it does not fabricate those data sources.
-
-Implemented capabilities:
-
-- active for-sale listings via `/v1/listings/sale`;
-- recent public-record sales via `/v1/properties` and `saleDateRange`;
-- property-record lookup by provider ID;
-- ZIP-level market statistics via `/v1/markets`;
-- provider-side filtering for common price/property attributes;
-- five-minute backend response caching by default; and
-- explicit source attribution on normalized records.
-
-Current limitations:
-
-- RentCast exposes `Active` and `Inactive` sale-listing status rather than a distinct pending status, so the first adapter does not claim to provide verified pending listings.
-- Listing photos are not assumed to be available. The UI uses a neutral “No listing photo supplied” placeholder rather than inventing a property photo.
-- AVM/value estimates are not enabled yet. Missing estimates remain missing instead of being synthesized from listing price.
-- This integration is not a direct Heartland MLS feed. A licensed MLS/RESO Web API adapter can be added behind the same backend later.
-
-## Local Development
-
-Requirements: Bun and a current Node.js runtime.
-
-Install dependencies:
+Requirements: Bun, Node.js, and PostgreSQL 16 with PostGIS (`jacen_dev`).
 
 ```bash
 bun install --frozen-lockfile
-```
-
-Run the original full-stack development server:
-
-```bash
-bun run dev
-```
-
-Run only the standalone live-data backend:
-
-```bash
 cp .env.example .env
-# Add RENTCAST_API_KEY to .env
-bun run dev:backend
+# set DATABASE_URL if you are not using the local peer-auth default
+bun run db:views          # apply sql/api_dashboard_views.sql
+bun run lint
+bun run test
+bun run dev               # Express + Vite + dashboard API on :3000
 ```
 
-Build/verify:
+`bun run dev:backend` starts the same `createApp()` without Vite. It requires a reachable database and `api.dashboard_*` views.
+
+## Database contract
+
+The running API reads **only** `api.dashboard_*` (plus `api.ingest_state`).
 
 ```bash
-bun run lint
-bun run build
-bun run build:backend
-bun run build:pages
+psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/api_dashboard_views.sql
+# or
+bin/create-dashboard-contract.sh
 ```
 
-## Backend Environment
+A clean database that already has `raw.*` / `core.*` / `mart.residential_properties` reaches API-ready state from that script alone. `tests/fixtures/minimal.sql` plus the same views is the CI path.
+
+Owner PII lives on `api.dashboard_property_search` and `api.dashboard_property_detail`. Those views are granted to role `dashboard_app`, not `PUBLIC`. Non-PII aggregates are also granted to `dashboard_readonly`.
+
+After a new ingest:
+
+```bash
+db/refresh_materialized.sh
+```
+
+That refreshes `mart.residential_properties` and stamps `api.ingest_state`.
+
+See `docs/DB_CONTRACT.md` and `docs/ARCHITECTURE.md`.
+
+## Environment
+
+Production (`NODE_ENV=production`) **will not start** unless dashboard auth is configured:
 
 ```dotenv
-RENTCAST_API_KEY="..."
+DATABASE_URL="postgresql://..."
+DASHBOARD_AUTH_USER="..."
+DASHBOARD_AUTH_PASSWORD="..."
+# or
+API_KEY="..."
+
 ALLOWED_ORIGINS="https://jnibarger01.github.io"
-PROVIDER_CACHE_TTL_MS="300000"
 ```
 
-`RENTCAST_API_KEY` is a backend-only secret. Do not create a `VITE_RENTCAST_API_KEY` variable and do not put the key in GitHub Pages settings.
+`RENTCAST_API_KEY` is optional and only used by `/api/provider/*`. Never create `VITE_RENTCAST_API_KEY`.
 
-## Render Deployment
+Do **not** set `VITE_API_KEY` for GitHub Pages. A key in that bundle is public.
 
-`render.yaml` defines a standalone Node web service named `kc-real-estate-api`.
+Authenticated deploy: `bun run build && bun run start` so HTTP Basic covers HTML and `/api` on one origin.
 
-On the first Render Blueprint deployment:
+## Health and routes
 
-1. connect this repository;
-2. create the service from `render.yaml`;
-3. provide `RENTCAST_API_KEY` when Render prompts for the `sync: false` variable;
-4. wait for `/healthz` to report `providerConfigured: true`; and
-5. copy the service's final HTTPS URL.
+| Path | Auth | Purpose |
+|---|---|---|
+| `GET /api/health`, `/health`, `/healthz` | public | process + Postgres + PostGIS + `api.dashboard_*` readiness |
+| `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
+| `GET /api/properties/*` | required in production | search/detail including owner PII |
+| `GET /api/map/*` | required in production | bbox GeoJSON |
+| `POST /mcp`, `POST /api/mcp` | same protect as `/api` | JSON-RPC; `tools/call` is not mocked |
+| `GET /api/provider/*` | required except `/provider/status` | optional RentCast |
 
-The backend binds to Render's `PORT` on `0.0.0.0` and exposes:
+Failures stay failures. MCP `tools/call` returns a JSON-RPC error. The explorer client (`ZillowMcpClient`) never converts abort/network/provider errors into `success: true`. Fixtures run only when `VITE_ALLOW_FIXTURE_ADAPTER=true` in a Vite dev build.
 
-- `GET /health` and `GET /healthz`
-- `GET /api/provider/status`
-- `GET /api/properties?location=Kansas%20City,%20MO` (or `zipCode=64111`)
-- `GET /api/properties/:propertyId`
-- `GET /api/market-summary?zipCode=64111`
-- `POST /api/zillow/mcp` — legacy frontend compatibility path backed by the live provider
-- `POST /api/market-insights` — deterministic insight response for the current result set
+## Render
 
-`GET /api/reso/sync` reports whether Bridge RESO configuration is present. The
-corresponding `POST` is an operator-only, token-protected placeholder and will
-remain disabled until a PostgreSQL persistence adapter is added; it is not a
-public-browser endpoint.
+`render.yaml` deploys `backend.ts` (`createApp()`, no Vite). Set `DATABASE_URL`, `DASHBOARD_AUTH_USER`, `DASHBOARD_AUTH_PASSWORD`, and `ALLOWED_ORIGINS`. Confirm `/api/health` reports `queryReadiness.ok: true` before pointing Pages at the service.
 
-## Connect GitHub Pages to the Backend
+## GitHub Pages
 
-After the backend is deployed, create this **GitHub repository Actions variable**:
+Pages is not the authenticated product. The workflow may inject a public `VITE_API_BASE_URL` and **never** injects `VITE_API_KEY`. The UI states that owner records are only available on the same-origin API deploy. Compiled Pages output is rejected if it contains `VITE_API_KEY`.
 
-```text
-KC_REAL_ESTATE_API_BASE_URL=https://your-backend.example.com
+## Tests
+
+```bash
+bun run test:unit          # auth, MCP fail-closed, provider, search
+bun run test               # unit + API integration against DATABASE_URL
+bun run test:e2e           # Playwright against the production same-origin binary
 ```
 
-Do not make it a secret; the public backend URL is intentionally shipped to the browser.
-
-`.github/workflows/deploy-pages.yml` passes that value into the Pages build as `VITE_API_BASE_URL`. `src/config/runtime.ts` then switches the Pages bundle from local static mode to the external HTTPS API.
-
-If the variable is empty, Pages remains in fixture mode.
-
-## GitHub Pages Deployment
-
-`.github/workflows/deploy-pages.yml` runs on pushes to `main` and manual dispatch. It:
-
-- installs from `bun.lock`;
-- typechecks;
-- builds the frontend with `/real-estate/` as its Vite base;
-- injects only the public API base URL;
-- rejects server-secret markers in compiled output; and
-- deploys through the official GitHub Pages Actions flow.
-
-`.github/workflows/ci.yml` additionally validates pull requests by typechecking and building both the standalone backend and Pages frontend.
-
-## Data Flow and Fallback
-
-Live mode:
-
-```text
-Browser search
-  -> GitHub Pages JavaScript
-  -> HTTPS POST /api/zillow/mcp
-  -> backend cache
-  -> RentCast API
-  -> normalized Property[]
-  -> browser analytics/comparables/map
-```
-
-Failure mode:
-
-```text
-Backend unavailable / provider key missing / provider error
-  -> client request fails
-  -> existing local fixture adapter is used
-```
-
-The fallback keeps the application usable, but the UI should be checked for the data-source badge before treating records as live.
-
-## Security
-
-- `RENTCAST_API_KEY` stays on the backend only.
-- CORS allows the GitHub Pages origin and local development origins by default.
-- Additional origins must be explicitly configured with `ALLOWED_ORIGINS`.
-- The backend disables the Express `X-Powered-By` header and limits JSON request bodies.
-- Compiled Pages output is scanned for secret-variable markers in CI and deployment workflows.
-- `.env*` files remain ignored except for `.env.example`.
-
-## Existing Full-Stack Integrations
-
-The repository still retains `server.ts`, the optional Zillow MCP proxy path, and optional server-side Gemini integration. The new `backend.ts` does not remove those capabilities; it provides a smaller deployable API specifically for the GitHub Pages architecture.
-
-## Data Limitations
-
-- Provider availability and field completeness vary by market and county.
-- Public-record sale data may lag recording/ingestion timelines.
-- Live provider records are not formal appraisals, title reports, or professional real-estate advice.
-- The initial provider is not a direct Heartland MLS feed.
-- Browser-side comparables are analytical matches within the returned dataset, not an appraisal-grade CMA.
-
-## Next Development Targets
-
-- Add a licensed Heartland MLS / RESO Web API provider adapter when credentials are available.
-- Add RentCast AVM/value and rent-estimate endpoints if desired.
-- Add persistent Redis/Postgres caching if traffic outgrows the in-memory cache.
-- Add request throttling and usage telemetry before opening the backend to broader public traffic.
-- Add contract tests with recorded/sanitized provider fixtures.
+CI applies `tests/fixtures/minimal.sql` + `sql/api_dashboard_views.sql`, runs those suites, builds the production binary, smoke-starts it with auth required, and runs the browser suite.

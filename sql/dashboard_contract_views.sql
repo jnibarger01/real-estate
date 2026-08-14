@@ -1,3 +1,5 @@
+-- DEPRECATED. Do not apply. Canonical contract is sql/api_dashboard_views.sql
+-- (api.dashboard_*). The dashboard.* schema is not read by the running API.
 -- Dashboard contract views (Jackson County Property Intelligence)
 -- Owned by dashboard schema; read-only mart.* re-export so the API never touches raw tables.
 

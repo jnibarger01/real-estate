@@ -16,17 +16,19 @@ const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 interface Props {
   onSelect?: (parcelId: string, propertyId: number) => void;
   selectedParcelId?: string | null;
+  focus?: { lng: number; lat: number } | null;
 }
 
-export default function PropertyMap({ onSelect, selectedParcelId }: Props) {
+export default function PropertyMap({ onSelect, selectedParcelId, focus }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [bbox, setBbox] = useState<[number, number, number, number]>(DEFAULT_BBOX);
+  const [zoom, setZoom] = useState(ZOOM);
   const [styleReady, setStyleReady] = useState(false);
 
   const mapQuery = useQuery({
-    queryKey: ['map-properties', bbox],
-    queryFn: () => api.mapProperties(bbox, 8000),
+    queryKey: ['map-properties', bbox, zoom],
+    queryFn: () => api.mapProperties(bbox, undefined, zoom),
     enabled: true,
     staleTime: 30_000,
   });
@@ -44,24 +46,35 @@ export default function PropertyMap({ onSelect, selectedParcelId }: Props) {
     });
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     mapRef.current = map;
-    // Expose for deterministic tests/tooling: programmatic selection and map
-    // introspection. This is the same code path the real parcel-fill click uses.
-    (window as unknown as Record<string, unknown>).__reMap = map;
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__reMap = map;
+    }
 
-    const updateBbox = () => {
-      const b = map.getBounds();
-      setBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const updateViewport = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        const b = map.getBounds();
+        setBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+        setZoom(map.getZoom());
+      }, 300);
     };
 
     map.on('load', () => setStyleReady(true));
-    map.on('moveend', updateBbox);
-    map.on('zoomend', updateBbox);
+    map.on('moveend', updateViewport);
+    map.on('zoomend', updateViewport);
 
     return () => {
+      clearTimeout(debounce);
       map.remove();
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!focus || !mapRef.current) return;
+    mapRef.current.flyTo({ center: [focus.lng, focus.lat], zoom: Math.max(mapRef.current.getZoom(), 16), duration: 800 });
+  }, [focus]);
 
   const ensureStyleReady = useCallback(() => {
     const map = mapRef.current;
@@ -138,8 +151,8 @@ export default function PropertyMap({ onSelect, selectedParcelId }: Props) {
     }
   }, [mapQuery.data, selectedParcelId, handleParcelSelect, ensureStyleReady]);
 
-  // Expose the same selection handler for deterministic tests.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     (window as unknown as Record<string, unknown>).__reSelectParcel = handleParcelSelect;
     return () => {
       delete (window as unknown as Record<string, unknown>).__reSelectParcel;

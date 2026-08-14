@@ -1,6 +1,6 @@
 {
-  "name": "Real Estate Market Explorer",
-  "description": "Interactive real estate intelligence dashboard connecting to Zillow MCP server for active listings, sales history, price trends, comparables, and AI market insights.",
+  "name": "Jackson County Property Intelligence",
+  "description": "Jackson County assessor dashboard over Postgres/PostGIS: parcel search, map, value trends, and owner records behind a single createApp() API.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

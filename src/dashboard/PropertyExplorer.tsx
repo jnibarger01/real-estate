@@ -11,6 +11,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, ChevronsUpDown, MapPin, X } from 'lucide-react';
 import { api, currency, formatNumber, toNumber, type PropertyRecord } from '../lib/api';
+import { runtimeConfig } from '../config/runtime';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
@@ -23,9 +24,10 @@ interface Props {
   selectedPropertyId?: number | null;
   selectedParcelId?: string | null;
   onSelectProperty?: (r: PropertyRecord) => void;
+  onClearSelection?: () => void;
 }
 
-export default function PropertyExplorer({ filters, selectedPropertyId, selectedParcelId, onSelectProperty }: Props) {
+export default function PropertyExplorer({ filters, selectedPropertyId, selectedParcelId, onSelectProperty, onClearSelection }: Props) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [limit, setLimit] = useState(50);
   const [selected, setSelected] = useState<PropertyRecord | null>(null);
@@ -33,16 +35,44 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
   const search = useQuery({
     queryKey: ['properties', filters, limit],
     queryFn: () => api.searchProperties({ ...filters, limit }),
+    enabled: runtimeConfig.ownerPiiEnabled,
     staleTime: 30_000,
   });
 
   // Reflect externally selected property (e.g. from map clicks). A parcel clicked
   // on the map may fall outside the visible table rows, so resolve it by parcel_id.
   const externalSelectedQuery = useQuery({
-    queryKey: ['property-by-parcel', selectedParcelId],
-    queryFn: () =>
-      api.searchProperties({ q: String(selectedParcelId), limit: 5 }).then((r) => r.results[0] ?? null),
-    enabled: selectedParcelId != null && !selected,
+    queryKey: ['property-detail', selectedPropertyId],
+    queryFn: () => api.getProperty(selectedPropertyId!).then((detail) => {
+      const match = search.data?.results.find((r) => r.property_id === detail.property_id);
+      if (match) return match;
+      return {
+        parcel_id: String(detail.parcel.parcel_id ?? selectedParcelId ?? ''),
+        property_id: detail.property_id,
+        apn_display: (detail.parcel.apn_display as string | null) ?? null,
+        parcel_number: (detail.parcel.parcel_number as string | null) ?? null,
+        situs_address: (detail.parcel.situs_address as string | null) ?? null,
+        situs_city: (detail.parcel.situs_city as string | null) ?? null,
+        situs_zip: (detail.parcel.situs_zip as string | null) ?? null,
+        landuse_code: (detail.assessment.landuse_code as string | null) ?? null,
+        landuse_description: (detail.assessment.landuse_description as string | null) ?? null,
+        year_built: (detail.assessment.year_built as number | null) ?? null,
+        stories: null,
+        bedrooms: (detail.assessment.bedrooms as number | null) ?? null,
+        full_baths: (detail.assessment.full_baths as number | null) ?? null,
+        half_baths: (detail.assessment.half_baths as number | null) ?? null,
+        total_sqft: (detail.assessment.total_sqft as number | null) ?? null,
+        living_area: (detail.assessment.living_area as number | null) ?? null,
+        tax_year: (detail.assessment.tax_year as string | null) ?? null,
+        assessed_value_total: (detail.assessment.assessed_value_total as number | null) ?? null,
+        market_value_total: (detail.assessment.market_value_total as number | null) ?? null,
+        owner_info: detail.ownership.owner_info,
+        owner_mailing_address: detail.ownership.owner_mailing_address,
+        lng: detail.geometry.lng,
+        lat: detail.geometry.lat,
+      } satisfies PropertyRecord;
+    }),
+    enabled: runtimeConfig.ownerPiiEnabled && selectedPropertyId != null && !selected,
     staleTime: 60_000,
   });
 
@@ -57,6 +87,7 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
   };
   const handleClose = () => {
     setSelected(null);
+    onClearSelection?.();
   };
 
   const columns = useMemo(
@@ -172,7 +203,11 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
         </div>
       </CardHeader>
       <CardContent>
-        {search.isLoading ? (
+        {!runtimeConfig.ownerPiiEnabled ? (
+          <div className="py-10 text-center text-sm text-slate-500" data-testid="pii-disabled">
+            Owner records are disabled on this static host. Open the dashboard on the API origin to search parcels.
+          </div>
+        ) : search.isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
@@ -210,7 +245,11 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
                 {table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                    data-testid="property-row"
+                    className={`cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50 ${
+                      row.original.property_id === selectedPropertyId ? 'bg-violet-50' : ''
+                    }`}
+                    onClick={() => handleSelect(row.original)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-3 py-2 align-top">
@@ -233,7 +272,12 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
 
       {/* Detail panel */}
       {effectiveSelected && (
-        <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:inset-x-auto sm:right-6">
+        <div
+          className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:inset-x-auto sm:right-6"
+          role="dialog"
+          aria-modal="true"
+          data-testid="property-detail"
+        >
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">

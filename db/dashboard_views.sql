@@ -1,3 +1,4 @@
+-- DEPRECATED. Do not apply. Canonical contract is sql/api_dashboard_views.sql.
 -- Dashboard API contract views (api.* application boundary)
 -- Run as a role with privileges to query mart.* and raw.*.
 
