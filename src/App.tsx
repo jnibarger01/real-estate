@@ -16,6 +16,8 @@ import { ZillowMcpClient } from './services/ZillowMcpClient';
 import { MarketAnalyticsService } from './services/MarketAnalyticsService';
 import { PropertyComparisonService } from './services/PropertyComparisonService';
 import { MapDataTransformer } from './services/MapDataTransformer';
+import { LocalMarketInsightService } from './services/LocalMarketInsightService';
+import { runtimeConfig } from './config/runtime';
 
 // UI Components
 import { MobileHeroHeader } from './components/MobileHeroHeader';
@@ -77,6 +79,7 @@ export default function App() {
   const [insights, setInsights] = useState<MarketInsightResponse | null>(null);
   const [mcpSource, setMcpSource] = useState<'mcp_server' | 'mock_adapter'>('mock_adapter');
   const [isInsightsLoading, setIsInsightsLoading] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modals & Drawers state
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
@@ -159,6 +162,7 @@ export default function App() {
 
   // Fetch Zillow MCP Data
   const loadData = useCallback(async () => {
+    setLoadError(null);
     try {
       const response = await ZillowMcpClient.executeTool('zillow_search', {
         location: filters.locationQuery,
@@ -179,12 +183,13 @@ export default function App() {
         const summary = MarketAnalyticsService.calculateMarketSummary(fetchedProps);
         setMarketSummary(summary);
 
-        if (!selectedProperty && fetchedProps.length > 0) {
-          setSelectedProperty(fetchedProps[0]);
-        }
+        setSelectedProperty(current =>
+          fetchedProps.find(property => property.id === current?.id) || fetchedProps[0] || null
+        );
       }
     } catch (err) {
       console.error('Failed to execute Zillow MCP search:', err);
+      setLoadError('Property data could not be loaded. Please try again.');
     }
   }, [filters]);
 
@@ -209,9 +214,14 @@ export default function App() {
 
   // Fetch AI Market Insights
   const handleFetchInsights = async () => {
+    if (runtimeConfig.isStatic) {
+      setInsights(LocalMarketInsightService.generate(properties, marketSummary, filters.locationQuery));
+      return;
+    }
+
     setIsInsightsLoading(true);
     try {
-      const res = await fetch('/api/market-insights', {
+      const res = await fetch(runtimeConfig.apiUrl('/api/market-insights'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,9 +235,12 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setInsights(data);
+      } else {
+        setInsights(LocalMarketInsightService.generate(properties, marketSummary, filters.locationQuery));
       }
     } catch (err) {
       console.error('Failed to fetch AI market insights:', err);
+      setInsights(LocalMarketInsightService.generate(properties, marketSummary, filters.locationQuery));
     } finally {
       setIsInsightsLoading(false);
     }
@@ -237,7 +250,7 @@ export default function App() {
     if (properties.length > 0) {
       handleFetchInsights();
     }
-  }, [properties.length]);
+  }, [properties, marketSummary, filters.locationQuery]);
 
   const handleSelectProperty = (p: Property) => {
     setSelectedProperty(p);
@@ -245,11 +258,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F5F7] text-slate-800 font-sans antialiased flex flex-col pb-20 selection:bg-purple-600 selection:text-white">
+    <div className="min-h-screen overflow-x-hidden bg-[#F4F5F7] text-slate-800 font-sans antialiased flex flex-col pb-20 selection:bg-purple-600 selection:text-white">
       {/* 1. Mobile & Desktop Top Bar + Skyline Hero Banner */}
       <MobileHeroHeader
         currentArea={filters.locationQuery}
         mcpSource={mcpSource}
+        deploymentMode={runtimeConfig.deploymentMode}
         onOpenMenu={() => setIsFilterDrawerOpen(true)}
         onOpenMcpModal={() => setIsMcpModalOpen(true)}
         onOpenShortcutsModal={() => setIsShortcutsModalOpen(true)}
@@ -268,6 +282,11 @@ export default function App() {
 
       {/* 3. Main Body */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-6">
+        {loadError && (
+          <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            {loadError}
+          </div>
+        )}
         {/* Quick KPI Stat Cards (2x2 / 4-card grid) */}
         <KpiSummaryBar summary={marketSummary} />
 
@@ -319,6 +338,7 @@ export default function App() {
             searchRegion={filters.locationQuery}
             onRefreshInsights={handleFetchInsights}
             isLoading={isInsightsLoading}
+            deploymentMode={runtimeConfig.deploymentMode}
           />
         </section>
 
@@ -348,6 +368,7 @@ export default function App() {
       />
 
       <PropertyDetailDrawer
+        isOpen={isDetailDrawerOpen}
         property={selectedProperty}
         onClose={() => setIsDetailDrawerOpen(false)}
       />
@@ -364,6 +385,7 @@ export default function App() {
         isOpen={isMcpModalOpen}
         onClose={() => setIsMcpModalOpen(false)}
         mcpSource={mcpSource}
+        deploymentMode={runtimeConfig.deploymentMode}
         onRefreshData={loadData}
       />
 

@@ -124,7 +124,7 @@ export const MapSection: React.FC<MapSectionProps> = ({
       center: initialCenter,
       zoom: 12,
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
     });
 
     mapRef.current = map;
@@ -133,14 +133,17 @@ export const MapSection: React.FC<MapSectionProps> = ({
     const lightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
     });
 
     const streetTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
     });
 
     const satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 18,
+      attribution: 'Tiles &copy; Esri',
     });
 
     lightTiles.addTo(map);
@@ -193,12 +196,12 @@ export const MapSection: React.FC<MapSectionProps> = ({
 
     let newTileLayer: L.TileLayer;
     if (mapStyle === 'satellite') {
-      newTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
+      newTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Tiles &copy; Esri' });
     } else if (mapStyle === 'street') {
-      newTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+      newTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
     } else {
       // Light Cream Carto Voyager style
-      newTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd' });
+      newTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' });
     }
 
     newTileLayer.addTo(map);
@@ -477,7 +480,7 @@ export const MapSection: React.FC<MapSectionProps> = ({
       id="interactive-map-container"
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      className="relative w-full h-[540px] md:h-[620px] bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-shadow"
+      className="relative w-full h-[430px] sm:h-[540px] md:h-[620px] bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-shadow"
       aria-label="Interactive real estate map. Click or press Tab to focus, then use Arrow keys to pan and + / - keys to zoom."
     >
       {/* Top Map Header Bar */}

@@ -65,7 +65,7 @@ export const AnalyticsSection: React.FC<AnalyticsSectionProps> = ({
             Market Analytics & Historical Visualizations
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Deep econometric analysis based on fetched Zillow transaction records. Click chart elements to filter map & cards.
+            Browser-side exploratory analytics derived from the current fixture dataset. Trend series are modeled illustrations, not verified historical Zillow records.
           </p>
         </div>
 
@@ -306,8 +306,8 @@ export const AnalyticsSection: React.FC<AnalyticsSectionProps> = ({
                   <td className="py-2.5 px-3 text-slate-600">{item.salesVolume} homes</td>
                   <td className="py-2.5 px-3 text-slate-600">{item.daysOnMarket} days</td>
                   <td className="py-2.5 px-3">
-                    <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold px-2 py-0.5 rounded">
-                      +{item.yoyChangePct}%
+                    <span className="inline-block bg-slate-50 text-slate-600 border border-slate-200 text-[11px] font-bold px-2 py-0.5 rounded">
+                      Unavailable
                     </span>
                   </td>
                 </tr>

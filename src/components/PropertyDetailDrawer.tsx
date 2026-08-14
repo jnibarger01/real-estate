@@ -26,22 +26,24 @@ import {
 } from 'lucide-react';
 
 interface PropertyDetailDrawerProps {
+  isOpen: boolean;
   property: Property | null;
   onClose: () => void;
 }
 
 export const PropertyDetailDrawer: React.FC<PropertyDetailDrawerProps> = ({
+  isOpen,
   property,
   onClose,
 }) => {
-  if (!property) return null;
-
   const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   // Mortgage Calculator State
   const [downPaymentPct, setDownPaymentPct] = useState(20);
   const [interestRatePct, setInterestRatePct] = useState(6.8);
   const [loanTermYears, setLoanTermYears] = useState(30);
+
+  if (!isOpen || !property) return null;
 
   // Calculate Payment
   const principal = property.price * (1 - downPaymentPct / 100);

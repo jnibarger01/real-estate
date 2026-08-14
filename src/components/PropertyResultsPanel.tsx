@@ -137,6 +137,15 @@ export const PropertyResultsPanel: React.FC<PropertyResultsPanelProps> = ({
         </button>
       </div>
 
+      {properties.length === 0 && (
+        <div role="status" className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+          <h3 className="text-base font-bold text-slate-900">No fixture properties match these filters</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+            Try Kansas City, MO or Overland Park, KS 66204, or broaden the price and property filters.
+          </p>
+        </div>
+      )}
+
       {/* Tab 1: Featured Hot Opportunities Cards */}
       {activeTab === 'hot' && (
         <AnimatePresence mode="popLayout">

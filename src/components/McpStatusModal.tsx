@@ -6,11 +6,13 @@
 import React, { useState } from 'react';
 import { Database, X, CheckCircle2, ShieldCheck, RefreshCw, Code, Trash2 } from 'lucide-react';
 import { ZillowMcpClient } from '../services/ZillowMcpClient';
+import { DeploymentMode } from '../config/runtime';
 
 interface McpStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
   mcpSource: 'mcp_server' | 'mock_adapter';
+  deploymentMode: DeploymentMode;
   onRefreshData: () => void;
 }
 
@@ -18,14 +20,15 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
   isOpen,
   onClose,
   mcpSource,
+  deploymentMode,
   onRefreshData,
 }) => {
-  if (!isOpen) return null;
-
   const [testTool, setTestTool] = useState<'zillow_search' | 'zillow_property_details' | 'zillow_comparables' | 'zillow_market_trends'>('zillow_search');
   const [testLocation, setTestLocation] = useState('Kansas City 64112');
   const [testResult, setTestResult] = useState<any>(null);
   const [isTesting, setIsTesting] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleRunTest = async () => {
     setIsTesting(true);
@@ -56,8 +59,8 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-[#d69e2e]" />
             <div>
-              <h2 className="font-semibold text-sm">Zillow MCP Server & Tool Inspector</h2>
-              <p className="text-[10px] text-gray-300">Model Context Protocol Integration Diagnostics</p>
+              <h2 className="font-semibold text-sm">{deploymentMode === 'static' ? 'Static Market Explorer' : 'Zillow MCP Server & Tool Inspector'}</h2>
+              <p className="text-[10px] text-gray-300">{deploymentMode === 'static' ? 'GitHub Pages deployment status' : 'Model Context Protocol Integration Diagnostics'}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-300 hover:text-white">
@@ -73,11 +76,13 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
               <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
                 mcpSource === 'mcp_server' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
               }`}>
-                {mcpSource === 'mcp_server' ? 'External Zillow MCP Server' : 'Integrated Local MCP Adapter Mode'}
+                {deploymentMode === 'static' ? 'Local Dataset Mode' : mcpSource === 'mcp_server' ? 'External Zillow MCP Server' : 'Integrated Local MCP Adapter Mode'}
               </span>
             </div>
             <p className="text-[#718096] text-[11px] leading-relaxed">
-              When `ZILLOW_MCP_SERVER_URL` environment variable is defined, queries proxy directly to the live Zillow MCP instance. Otherwise, queries fall back seamlessly to the integrated mock adapter.
+              {deploymentMode === 'static'
+                ? 'This GitHub Pages build uses local fixture data and browser-side analysis. Live MCP/API connectivity requires a separately hosted HTTPS backend.'
+                : 'When a server-side MCP provider is configured, queries proxy to it. Otherwise, queries use the integrated local adapter.'}
             </p>
           </div>
 
@@ -102,7 +107,7 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
           </div>
 
           {/* Interactive Tool Tester */}
-          <div className="bg-white p-3.5 rounded-xl border border-[#e5e2d9] space-y-2">
+          {deploymentMode !== 'static' && <div className="bg-white p-3.5 rounded-xl border border-[#e5e2d9] space-y-2">
             <h3 className="font-bold uppercase tracking-wider text-gray-500 text-[10px]">
               Interactive MCP Dispatch Tester
             </h3>
@@ -140,7 +145,7 @@ export const McpStatusModal: React.FC<McpStatusModalProps> = ({
                 {JSON.stringify(testResult, null, 2)}
               </pre>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Footer Actions */}
