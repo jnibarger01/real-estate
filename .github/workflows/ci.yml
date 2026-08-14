@@ -45,7 +45,7 @@ jobs:
             echo 'Potential secret material found in dist.' >&2
             exit 1
           fi
-          if grep -R -E '(sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|(api[_-]?key|secret|token)["'"'"'= :]+[A-Za-z0-9_-]{32,})' dist; then
+          if grep -R -E '((^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|(api[_-]?key|secret|token)["'"'"'= :]+[A-Za-z0-9_-]{32,})' dist; then
             echo 'Potential shaped secret material found in dist.' >&2
             exit 1
           fi

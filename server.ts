@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import express from 'express';
+import express, { type RequestHandler } from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -11,6 +12,8 @@ import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { executeRentCastTool, isRentCastConfigured, RentCastProviderError } from './src/server/rentcast';
 import { apiRateLimit, corsAllowList, log, requestId, securityHeaders } from './src/server/httpDefaults';
+import { pool } from './src/api/db/pool.js';
+import dashboardRouter from './src/api/routes/dashboard.js';
 
 dotenv.config();
 
@@ -23,6 +26,46 @@ const PORT = Number(process.env.PORT || 3000);
 app.use(express.json({ limit: '10mb' }));
 app.disable('x-powered-by');
 app.use(requestId, securityHeaders, corsAllowList());
+
+
+const authUser = process.env.DASHBOARD_AUTH_USER;
+const authPassword = process.env.DASHBOARD_AUTH_PASSWORD;
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+const dashboardAuth: RequestHandler = (req, res, next) => {
+  if (!authUser || !authPassword) return next();
+  const authorization = req.get('authorization');
+  if (authorization?.startsWith('Basic ')) {
+    const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
+    const separator = decoded.indexOf(':');
+    if (separator >= 0) {
+      const username = decoded.slice(0, separator);
+      const password = decoded.slice(separator + 1);
+      if (constantTimeEqual(username, authUser) && constantTimeEqual(password, authPassword)) return next();
+    }
+  }
+  res.set('WWW-Authenticate', 'Basic realm="Jackson County Property Intelligence"');
+  return res.status(401).send('Authentication required');
+};
+
+app.get('/api/health', async (_req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT 1 AS ok');
+    return res.json({ ok: true, db: rows[0]?.ok === 1 ? 'connected' : 'unavailable', time: new Date().toISOString() });
+  } catch (error) {
+    console.error('Dashboard health check failed:', error);
+    return res.status(503).json({ ok: false, db: 'error', error: 'health_check_failed' });
+  }
+});
+
+// Gate only the PostgreSQL dashboard API surface. Existing MCP/RentCast endpoints remain unchanged.
+app.use(['/api/dashboard', '/api/properties/search', '/api/map'], dashboardAuth);
+app.use('/api', dashboardRouter);
 
 // 1. MCP Streamable HTTP JSON-RPC Protocol Endpoint
 const MCP_TOOLS = [
@@ -408,6 +451,12 @@ app.get('/api/mcp/status', (req, res) => {
   });
 });
 
+// Protect the dashboard UI and its Vite/static assets when credentials are configured.
+app.use((req, res, next) => {
+  if (req.path === '/mcp' || req.path === '/api/mcp' || req.path.startsWith('/api/')) return next();
+  return dashboardAuth(req, res, next);
+});
+
 // Vite or static serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -425,7 +474,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Real Estate Market Explorer Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Dashboard API listening — Real Estate Market Explorer Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
