@@ -119,10 +119,18 @@ On the first Render Blueprint deployment:
 
 The backend binds to Render's `PORT` on `0.0.0.0` and exposes:
 
-- `GET /healthz`
+- `GET /health` and `GET /healthz`
 - `GET /api/provider/status`
+- `GET /api/properties?location=Kansas%20City,%20MO` (or `zipCode=64111`)
+- `GET /api/properties/:propertyId`
+- `GET /api/market-summary?zipCode=64111`
 - `POST /api/zillow/mcp` — legacy frontend compatibility path backed by the live provider
 - `POST /api/market-insights` — deterministic insight response for the current result set
+
+`GET /api/reso/sync` reports whether Bridge RESO configuration is present. The
+corresponding `POST` is an operator-only, token-protected placeholder and will
+remain disabled until a PostgreSQL persistence adapter is added; it is not a
+public-browser endpoint.
 
 ## Connect GitHub Pages to the Backend
 
