@@ -182,6 +182,10 @@ export default function App() {
         offset,
       });
 
+      if (!response.success) {
+        setLoadError(response.error || 'Property data could not be loaded.');
+        return;
+      }
       if (response.data?.properties) {
         const fetchedProps: Property[] = response.data.properties.map((p: any) =>
           MapDataTransformer.normalizePropertyData(p)

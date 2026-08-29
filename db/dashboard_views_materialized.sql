@@ -1,3 +1,6 @@
+-- DEPRECATED. Do not apply. Canonical contract is sql/api_dashboard_views.sql
+-- (live api.dashboard_* views). Refresh path is db/refresh_materialized.sh
+-- against mart.residential_properties.
 -- Materialized dashboard aggregates for the heavy full-table aggregations.
 -- Data is static between Jackson County ingests, so these are refreshed
 -- after each ingest rather than computed on every dashboard request.

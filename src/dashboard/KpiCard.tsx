@@ -9,11 +9,12 @@ interface KpiCardProps {
   value?: string;
   help?: string;
   trend?: number;
+  testId?: string;
 }
 
-export default function KpiCard({ icon, label, value, help, trend }: KpiCardProps) {
+export default function KpiCard({ icon, label, value, help, trend, testId }: KpiCardProps) {
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden" data-testid={testId}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <span className="text-sm text-slate-500">{label}</span>

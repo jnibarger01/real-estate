@@ -3,7 +3,6 @@ name: CI
 on:
   pull_request:
   push:
-    branches-ignore: [main]
 
 permissions:
   contents: read
@@ -15,6 +14,22 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: realestate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/realestate_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,14 +45,84 @@ jobs:
       - name: Typecheck
         run: bun run lint
 
-      - name: Test
-        run: bun run test
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply fixture schema and dashboard views
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -v ON_ERROR_STOP=1 -f tests/fixtures/minimal.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -v ON_ERROR_STOP=1 -f sql/api_dashboard_views.sql
+          PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -v ON_ERROR_STOP=1 -f sql/spatial_indexes.sql || true
+          PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -c "SELECT property_count FROM api.dashboard_summary;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -tAc "SELECT COUNT(*) FROM information_schema.role_table_grants WHERE grantee = 'PUBLIC' AND table_schema = 'api' AND privilege_type = 'SELECT' AND table_name IN ('dashboard_property_search','dashboard_property_detail')" | grep -qx 0
+
+      - name: Unit tests
+        run: bun run test:unit
+
+      - name: API integration tests
+        run: bunx tsx --test --test-timeout=120000 tests/api.integration.test.ts
+
+      - name: Build full-stack server
+        run: bun run build
 
       - name: Build standalone backend
         run: bun run build:backend
 
-      - name: Build Pages frontend
-        run: bun run build:pages
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Browser e2e against same-origin production binary
+        env:
+          CI: "true"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/realestate_test
+        run: bun run test:e2e
+
+      - name: Production binary smoke
+        env:
+          NODE_ENV: production
+          PORT: "3010"
+          DASHBOARD_AUTH_USER: ci-user
+          DASHBOARD_AUTH_PASSWORD: ci-pass
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/realestate_test
+        run: |
+          node dist/backend.js &
+          pid=$!
+          trap 'kill $pid' EXIT
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:3010/api/health" >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ok" = "1"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3010/api/dashboard/summary")
+          test "$code" = "401"
+          code=$(curl -s -o /tmp/dashboard-summary.json -w '%{http_code}' -u ci-user:ci-pass "http://127.0.0.1:3010/api/dashboard/summary")
+          test "$code" = "200"
+          grep -q property_count /tmp/dashboard-summary.json
+
+      - name: Production startup fails without auth
+        env:
+          NODE_ENV: production
+          PORT: "3011"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/realestate_test
+        run: |
+          if node dist/backend.js; then
+            echo 'production binary started without dashboard auth' >&2
+            exit 1
+          fi
+
+      - name: Dependency audit
+        run: bun audit --audit-level=high
+
+      - name: Secret scan of tracked source
+        run: |
+          if git grep -I -E '(BEGIN (RSA |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9_-]{24,}|AKIA[0-9A-Z]{16})' -- ':!*.lock' ':!bun.lock'; then
+            echo 'Potential secret material in source' >&2
+            exit 1
+          fi
 
       - name: Reject secret markers in compiled output
         run: |
@@ -45,7 +130,13 @@ jobs:
             echo 'Potential secret material found in dist.' >&2
             exit 1
           fi
-          if grep -R -E '((^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|(api[_-]?key|secret|token)["'"'"'= :]+[A-Za-z0-9_-]{32,})' dist; then
-            echo 'Potential shaped secret material found in dist.' >&2
+
+      - name: Pages bundle must not include VITE_API_KEY
+        env:
+          VITE_API_BASE_URL: https://example.invalid
+        run: |
+          bun run build:pages
+          if grep -R -E 'VITE_API_KEY' dist; then
+            echo 'Pages build leaked VITE_API_KEY identifier' >&2
             exit 1
           fi

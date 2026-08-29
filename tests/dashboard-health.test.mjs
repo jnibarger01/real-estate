@@ -30,8 +30,14 @@ test('GET /api/health returns database health JSON in dev mode', async () => {
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') ?? '', /application\/json/);
     const body = await response.json();
-    assert.equal(body.ok, true);
-    assert.equal(body.db, 'connected');
+    assert.equal(body.process.ok, true);
+    assert.equal(body.database.ok, true);
+    const invalidBbox = await fetch(`http://127.0.0.1:${port}/api/map/properties?bbox=-181,38,-93,39`);
+    assert.equal(invalidBbox.status, 400);
+    assert.deepEqual(await invalidBbox.json(), {
+      error: 'validation_error',
+      message: 'Request parameters are invalid',
+    });
   } finally {
     child.kill('SIGTERM');
   }

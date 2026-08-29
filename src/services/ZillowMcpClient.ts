@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { 
-  Property, 
-  ZillowMcpToolRequest, 
-  ZillowMcpToolResponse, 
-  SearchFilters, 
-  ComparableTolerances 
+import {
+  ZillowMcpToolRequest,
+  ZillowMcpToolResponse,
+  SearchFilters,
+  ComparableTolerances,
 } from '../types';
 import { LruCache } from '../server/lruCache';
 import { MapDataTransformer } from './MapDataTransformer';
@@ -25,9 +24,6 @@ export class ZillowMcpClient {
   private static cache = new LruCache<CacheEntry<any>>(200, 5 * 60 * 1000);
   private static activeController: AbortController | null = null;
 
-  /**
-   * Validates required parameters before dispatching Zillow MCP request.
-   */
   private static validateParams(toolName: ZillowMcpToolRequest['toolName'], params: Record<string, any>): string | null {
     if (!toolName) return 'Missing toolName';
 
@@ -57,26 +53,20 @@ export class ZillowMcpClient {
     return null;
   }
 
-  /**
-   * Executes a Zillow MCP Tool call through the backend proxy or local adapter.
-   */
   static async executeTool<T = any>(
     toolName: ZillowMcpToolRequest['toolName'],
     params: Record<string, any>
   ): Promise<ZillowMcpToolResponse<T>> {
-    // 1. Parameter Validation
     const validationError = this.validateParams(toolName, params);
     if (validationError) {
-      console.warn(`[ZillowMcpClient] Parameter Validation Error: ${validationError}`);
       return {
         success: false,
         error: `Parameter Validation Error: ${validationError}`,
-        source: 'mock_adapter',
+        source: 'mcp_server',
         timestamp: new Date().toISOString(),
       };
     }
 
-    // 2. Cache key check
     const cacheKey = `${toolName}:${JSON.stringify(params)}`;
     const cached = this.cache.get(cacheKey);
     if (cached) {
@@ -88,50 +78,69 @@ export class ZillowMcpClient {
       };
     }
 
-    // 3. Abort previous pending request
     if (this.activeController) {
       this.activeController.abort();
     }
     this.activeController = new AbortController();
 
-    if (!runtimeConfig.isStatic) try {
+    if (runtimeConfig.allowFixtures) {
+      const fallbackData = await this.executeLocalMockAdapter(toolName, params);
+      this.cache.set(cacheKey, { data: fallbackData, source: 'mock_adapter' });
+      return {
+        success: true,
+        data: fallbackData as T,
+        source: 'mock_adapter',
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (runtimeConfig.apiKey) headers['x-api-key'] = runtimeConfig.apiKey;
       const response = await fetch(runtimeConfig.apiUrl('/api/zillow/mcp'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ toolName, params }),
         signal: this.activeController.signal,
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data) {
-          this.cache.set(cacheKey, { data: result.data, source: result.source || 'mcp_server' });
-          return result;
-        }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.success === false) {
+        return {
+          success: false,
+          error: result.error || `Provider request failed (${response.status})`,
+          source: 'mcp_server',
+          timestamp: new Date().toISOString(),
+        };
       }
+      if (result.success && result.data) {
+        this.cache.set(cacheKey, { data: result.data, source: result.source || 'mcp_server' });
+        return result;
+      }
+      return {
+        success: false,
+        error: 'Provider returned an empty payload.',
+        source: 'mcp_server',
+        timestamp: new Date().toISOString(),
+      };
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.log('[ZillowMcpClient] Request cancelled by newer filter input.');
-      } else {
-        console.warn('[ZillowMcpClient] Backend MCP server offline or unreachable. Falling back to local MCP mock adapter:', err);
+      if (err?.name === 'AbortError') {
+        return {
+          success: false,
+          error: 'aborted',
+          source: 'mcp_server',
+          timestamp: new Date().toISOString(),
+        };
       }
+      return {
+        success: false,
+        error: err?.message || 'Provider request failed.',
+        source: 'mcp_server',
+        timestamp: new Date().toISOString(),
+      };
     }
-
-    // 4. Integrated Mock Adapter Execution fallback
-    const fallbackData = await this.executeLocalMockAdapter(toolName, params);
-    this.cache.set(cacheKey, { data: fallbackData, source: 'mock_adapter' });
-
-    return {
-      success: true,
-      data: fallbackData as T,
-      source: 'mock_adapter',
-      timestamp: new Date().toISOString(),
-    };
   }
 
-  /**
-   * Local MCP mock execution adapter that processes real filters & search parameters.
-   */
   private static async executeLocalMockAdapter(toolName: ZillowMcpToolRequest['toolName'], params: Record<string, any>) {
     const { INITIAL_REAL_ESTATE_PROPERTIES } = await import('../data/mockRealEstateData');
     switch (toolName) {
@@ -161,12 +170,18 @@ export class ZillowMcpClient {
       case 'zillow_property_details': {
         const zpid = String(params.zpid || params.propertyId);
         const found = INITIAL_REAL_ESTATE_PROPERTIES.find(p => p.zpid === zpid || p.id === zpid);
-        return found ? MapDataTransformer.normalizePropertyData(found) : MapDataTransformer.normalizePropertyData(INITIAL_REAL_ESTATE_PROPERTIES[0]);
+        if (!found) {
+          throw new Error(`Unknown property id: ${zpid}`);
+        }
+        return MapDataTransformer.normalizePropertyData(found);
       }
 
       case 'zillow_comparables': {
         const zpid = String(params.zpid || params.propertyId);
-        const refProperty = INITIAL_REAL_ESTATE_PROPERTIES.find(p => p.zpid === zpid || p.id === zpid) || INITIAL_REAL_ESTATE_PROPERTIES[0];
+        const refProperty = INITIAL_REAL_ESTATE_PROPERTIES.find(p => p.zpid === zpid || p.id === zpid);
+        if (!refProperty) {
+          throw new Error(`Unknown property id: ${zpid}`);
+        }
         const normalizedRef = MapDataTransformer.normalizePropertyData(refProperty);
         const normalizedAll = INITIAL_REAL_ESTATE_PROPERTIES.map(p => MapDataTransformer.normalizePropertyData(p));
         const tolerances: ComparableTolerances = params.tolerances || {
@@ -198,13 +213,10 @@ export class ZillowMcpClient {
       }
 
       default:
-        return { message: 'Tool executed successfully', params };
+        throw new Error(`Unknown fixture tool: ${toolName}`);
     }
   }
 
-  /**
-   * Clears current client cache.
-   */
   static clearCache() {
     this.cache.clear();
   }
