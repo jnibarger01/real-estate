@@ -62,11 +62,11 @@ jobs:
       - name: API integration tests
         run: bunx tsx --test --test-timeout=120000 tests/api.integration.test.ts
 
-      - name: Build standalone backend
-        run: bun run build:backend
-
       - name: Build full-stack server
         run: bun run build
+
+      - name: Build standalone backend
+        run: bun run build:backend
 
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
