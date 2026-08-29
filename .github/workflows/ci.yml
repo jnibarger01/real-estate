@@ -60,7 +60,7 @@ jobs:
         run: bun run test:unit
 
       - name: API integration tests
-        run: tsx --test --test-timeout=120000 tests/api.integration.test.ts
+        run: bunx tsx --test --test-timeout=120000 tests/api.integration.test.ts
 
       - name: Build standalone backend
         run: bun run build:backend
