@@ -89,13 +89,14 @@ ALLOWED_ORIGINS="https://jnibarger01.github.io"
 
 Do **not** set `VITE_API_KEY` for GitHub Pages. A key in that bundle is public.
 
-Authenticated deploy: `bun run build && bun run start` so HTTP Basic covers HTML and `/api` on one origin.
+Authenticated deploy: `bun run build && bun run start` on one origin. The SPA shows a login form; sessions use an httpOnly cookie (`SESSION_TTL_MS`, optional `SESSION_SECRET`). HTTP Basic and `API_KEY` still work for API clients.
 
 ## Health and routes
 
 | Path | Auth | Purpose |
 |---|---|---|
 | `GET /api/health`, `/health`, `/healthz` | public | process + Postgres + PostGIS + `api.dashboard_*` readiness |
+| `GET/POST /api/auth/session|login|logout|touch` | public | SPA session cookie lifecycle (`SESSION_TTL_MS`) |
 | `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
 | `GET /api/properties/*` | required in production | search/detail including owner PII |
 | `GET /api/map/*` | required in production | bbox GeoJSON |

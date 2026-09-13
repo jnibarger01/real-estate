@@ -136,6 +136,22 @@ export interface MapSummaryDatum {
   property_count: number;
 }
 
+export type AuthSessionResponse = {
+  authenticated: boolean;
+  authRequired: boolean;
+  username?: string;
+  expiresAt?: number;
+  issuedAt?: number;
+  ttlMs: number;
+  idleWarningMs: number;
+};
+
+function emitUnauthorized(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('dashboard:unauthorized'));
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -158,11 +174,40 @@ async function request<T>(path: string, query?: Record<string, string | number |
   if (runtimeConfig.apiKey) headers['x-api-key'] = runtimeConfig.apiKey;
   const res = await fetch(url.toString(), { headers, credentials: 'same-origin' });
   if (!res.ok) {
+    if (res.status === 401) emitUnauthorized();
     const body = await res.json().catch(() => ({}));
     throw new ApiError(body?.message || body?.error || `Request failed (${res.status})`, res.status);
   }
   return res.json() as Promise<T>;
 }
+
+async function authRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = new URL(runtimeConfig.apiUrl(path), window.location.origin);
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(init?.headers || {}),
+  };
+  if (runtimeConfig.apiKey) (headers as Record<string, string>)['x-api-key'] = runtimeConfig.apiKey;
+  const res = await fetch(url.toString(), { ...init, headers, credentials: 'same-origin' });
+  if (!res.ok) {
+    if (res.status === 401 && path !== '/api/auth/login') emitUnauthorized();
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(body?.message || body?.error || `Request failed (${res.status})`, res.status);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const authApi = {
+  session: () => authRequest<AuthSessionResponse>('/api/auth/session'),
+  login: (username: string, password: string) =>
+    authRequest<AuthSessionResponse>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => authRequest<{ ok: boolean }>('/api/auth/logout', { method: 'POST', body: '{}' }),
+  touch: () => authRequest<AuthSessionResponse>('/api/auth/touch', { method: 'POST', body: '{}' }),
+};
+
 
 export function toNumber(v: number | string | null | undefined): number {
   if (v === null || v === undefined) return 0;

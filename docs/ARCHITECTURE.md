@@ -43,7 +43,8 @@ api.dashboard_*
 Owner name and mailing address are returned by `/api/properties/search` and `/api/properties/:id`.
 
 - `NODE_ENV=production` refuses to start without `DASHBOARD_AUTH_USER`+`DASHBOARD_AUTH_PASSWORD` or `API_KEY`.
-- The same `createProtectMiddleware` covers `/api/*` (except health and `/api/provider/status`), `/mcp`, and the SPA when served from `server.ts`.
+- The same `createProtectMiddleware` covers `/api/*` (except health, `/api/provider/status`, and `/api/auth/*`) and `/mcp`.
+- SPA document is public; browsers authenticate via `POST /api/auth/login` (httpOnly `dashboard_session` cookie, TTL from `SESSION_TTL_MS`) or HTTP Basic / `X-Api-Key` for API clients. Logout clears the cookie and SPA query cache.
 - Database grants revoke `PUBLIC` on schema `api`. PII views are granted only to role `dashboard_app`.
 
 Local/test processes without auth remain usable. Networked deploys must not.
@@ -70,7 +71,7 @@ Allowlist env is `ALLOWED_ORIGINS`. Defaults include `https://jnibarger01.github
 
 ## Deployment
 
-The owner-PII product is same-origin: `bun run build && bun run start` (or Render serving `server.ts` / the SPA from the API host) with `DASHBOARD_AUTH_*`. HTTP Basic covers the document and `/api`.
+The owner-PII product is same-origin: `bun run build && bun run start` (or Render serving `server.ts` / the SPA from the API host) with `DASHBOARD_AUTH_*`. The document is public; `/api` requires a session cookie, HTTP Basic, or `X-Api-Key`.
 
 GitHub Pages is a public static shell. `runtimeConfig.ownerPiiEnabled` is false on Pages builds, `VITE_API_KEY` is stripped, and the workflow must not inject a credential. Do not treat `github.io` as an authenticated records app.
 

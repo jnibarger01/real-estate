@@ -126,7 +126,9 @@ jobs:
 
       - name: Reject secret markers in compiled output
         run: |
-          if grep -R -E 'GEMINI_API_KEY|RENTCAST_API_KEY|ZILLOW_MCP_SERVER_URL|PRIVATE KEY-----' dist; then
+          # Match real secret material (same family as the source scan). Env *names*
+          # like process.env.GEMINI_API_KEY are not credentials and must not fail CI.
+          if grep -R -E '(BEGIN (RSA |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9_-]{24,}|AKIA[0-9A-Z]{16})' dist; then
             echo 'Potential secret material found in dist.' >&2
             exit 1
           fi
