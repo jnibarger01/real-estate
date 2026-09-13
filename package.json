@@ -9,6 +9,7 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --sources-content=false --outfile=dist/server.js",
     "build:backend": "esbuild backend.ts --bundle --platform=node --format=esm --packages=external --sourcemap --sources-content=false --outfile=dist/backend.js",
     "build:pages": "vite build --mode pages --base=/real-estate/",
+    "check:pages-split": "bash scripts/check-pages-auth-split.sh",
     "start": "node dist/server.js",
     "start:backend": "node dist/backend.js",
     "clean": "rm -rf dist server.js",
