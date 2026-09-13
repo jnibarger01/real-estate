@@ -84,3 +84,7 @@ Render (`render.yaml`) still deploys `backend.ts` for API-only hosting. Point a 
 ## Saved searches
 
 Operators bookmark dashboard filter query params (`label` + sanitized `query_params`) in `api.saved_searches` via authenticated `/api/dashboard/saved-searches`. Explicit `owner` keys are rejected/stripped. The GitHub Pages shell must not persist owner names or saved-search rows in static assets or `localStorage`; `SavedSearches` is disabled when `runtimeConfig.isPagesBuild` is true.
+
+## CSV export
+
+Authenticated operators can download the current dashboard search as CSV via `GET /api/properties/export.csv`. Filters match `/api/properties/search`. Default columns exclude owner PII. `include_pii` + `confirm_pii` plus a live `dashboard_app` role check are required for owner columns. Row cap: **10_000** (`CSV_EXPORT_MAX_ROWS`); responses stream when large.

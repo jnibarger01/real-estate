@@ -4,7 +4,6 @@
  */
 
 import { z } from 'zod';
-
 const numeric = z.coerce.number();
 
 export const bboxSchema = z
@@ -54,6 +53,36 @@ export const searchQuerySchema = z.object({
   order: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().nonnegative().max(100_000).default(0),
+});
+
+/** Hard cap on rows returned by GET /api/properties/export.csv (documented in README). */
+const boolish = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0', 'yes', 'no'])])
+  .optional()
+  .transform((value) => {
+    if (value == null) return false;
+    if (typeof value === 'boolean') return value;
+    return value === 'true' || value === '1' || value === 'yes';
+  });
+
+/** Same filters as search; higher row cap; optional PII with explicit confirm. */
+export const exportQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  city: z.string().trim().max(100).optional(),
+  owner: z.string().trim().max(200).optional(),
+  parcel: z.string().trim().max(64).optional(),
+  landuse: z.string().trim().max(20).optional(),
+  minValue: z.coerce.number().int().nonnegative().optional(),
+  maxValue: z.coerce.number().int().nonnegative().optional(),
+  minBeds: z.coerce.number().int().nonnegative().optional(),
+  maxBeds: z.coerce.number().int().nonnegative().optional(),
+  minSqft: z.coerce.number().int().nonnegative().optional(),
+  maxSqft: z.coerce.number().int().nonnegative().optional(),
+  sort: z.enum(SORT_FIELDS).default('market_value_total'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+  limit: z.coerce.number().int().min(1).max(10_000).default(10_000),
+  include_pii: boolish,
+  confirm_pii: boolish,
 });
 
 export const propertyIdParamSchema = z.object({

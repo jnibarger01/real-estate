@@ -9,8 +9,9 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ChevronsUpDown, MapPin, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Download, MapPin, X } from 'lucide-react';
 import { api, currency, formatNumber, toNumber, type PropertyRecord } from '../lib/api';
+import { Button } from '../components/ui/button';
 import { runtimeConfig } from '../config/runtime';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -31,6 +32,30 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
   const [sorting, setSorting] = useState<SortingState>([]);
   const [limit, setLimit] = useState(50);
   const [selected, setSelected] = useState<PropertyRecord | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportCsv = async (includePii: boolean) => {
+    if (!runtimeConfig.ownerPiiEnabled) return;
+    if (includePii) {
+      const ok = window.confirm(
+        'Include owner name and mailing address in this CSV?\n\nThis downloads owner PII and requires the dashboard_app role. Cancel for a non-PII export.',
+      );
+      if (!ok) return;
+    }
+    setExporting(true);
+    setExportError(null);
+    try {
+      await api.exportSearchCsv(
+        { ...filters, limit },
+        includePii ? { includePii: true, confirmPii: true } : {},
+      );
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const search = useQuery({
     queryKey: ['properties', filters, limit],
@@ -177,7 +202,7 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
             {search.isLoading ? 'Searching…' : `${formatNumber(total)} matching properties`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {(filters.q || filters.city || filters.minValue !== undefined || filters.maxValue !== undefined) && (
             <Badge variant="secondary" className="gap-1">
               {[
@@ -189,6 +214,33 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
                 .filter(Boolean)
                 .join(' · ')}
             </Badge>
+          )}
+          {runtimeConfig.ownerPiiEnabled && (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="export-csv"
+                disabled={exporting || search.isLoading}
+                onClick={() => void handleExportCsv(false)}
+                title="Download CSV without owner PII (capped)"
+              >
+                <Download className="size-3.5" />
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                data-testid="export-csv-pii"
+                disabled={exporting || search.isLoading}
+                onClick={() => void handleExportCsv(true)}
+                title="Export CSV including owner PII (requires confirm + dashboard_app)"
+              >
+                Include PII…
+              </Button>
+            </>
           )}
           <select
             className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
@@ -203,6 +255,11 @@ export default function PropertyExplorer({ filters, selectedPropertyId, selected
         </div>
       </CardHeader>
       <CardContent>
+        {exportError && (
+          <p className="mb-3 text-xs text-rose-600" data-testid="export-csv-error" role="alert">
+            {exportError}
+          </p>
+        )}
         {!runtimeConfig.ownerPiiEnabled ? (
           <div className="py-10 text-center text-sm text-slate-500" data-testid="pii-disabled">
             Owner records are disabled on this static host. Open the dashboard on the API origin to search parcels.
