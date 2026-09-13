@@ -139,6 +139,16 @@ describe('map', () => {
     assert.ok(body.features.length > 0);
     assert.ok(body.features.length <= 25);
     assert.ok(body.features[0].geometry);
+    assert.equal(body.limit, 25);
+    assert.equal(body.geometry, 'simplified');
+  });
+
+  it('returns centroids under zoom 13 and respects limit', async () => {
+    const { status, body } = await json('/api/map/properties?bbox=-94.60,39.00,-94.50,39.10&zoom=10&limit=10');
+    assert.equal(status, 200);
+    assert.ok(body.features.length <= 10);
+    assert.equal(body.geometry, 'centroid');
+    assert.ok(body.limit <= 10);
   });
 
   it('rejects inverted bbox', async () => {

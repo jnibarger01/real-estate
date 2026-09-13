@@ -8,6 +8,8 @@ import { queryMany, queryOne } from '../db/pool.js';
 import {
   distributionsQuerySchema,
   likePattern,
+  mapGeomSqlExpression,
+  mapGeometryMode,
   mapLimitForZoom,
   mapQuerySchema,
   mapSummarySchema,
@@ -326,10 +328,8 @@ router.get('/map/properties', async (req, res, next) => {
     const parsed = mapQuerySchema.parse(req.query);
     const [minLng, minLat, maxLng, maxLat] = parsed.bbox;
     const limit = mapLimitForZoom(parsed.zoom, parsed.limit);
-    const useCentroid = (parsed.zoom ?? 12) < 13;
-    const geomExpr = useCentroid
-      ? 'ST_AsGeoJSON(centroid::geometry, 6)::jsonb'
-      : 'ST_AsGeoJSON(geom::geometry, 6)::jsonb';
+    const geometry = mapGeometryMode(parsed.zoom);
+    const geomExpr = mapGeomSqlExpression(geometry, parsed.zoom);
     const rows = await queryMany<{
       parcel_id: string;
       property_id: number;
@@ -367,7 +367,7 @@ router.get('/map/properties', async (req, res, next) => {
       total,
       limit,
       zoom: parsed.zoom ?? null,
-      geometry: useCentroid ? 'centroid' : 'polygon',
+      geometry,
       truncated: rows.length < total,
     });
   } catch (err) {

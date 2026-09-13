@@ -122,12 +122,15 @@ export interface MapFeatureCollection {
       parcel_id: string;
       property_id: number;
       market_value_total: number;
+      situs_address?: string | null;
     };
     geometry: GeoJsonGeometry;
   }>;
   total: number;
   limit: number;
   truncated: boolean;
+  zoom?: number | null;
+  geometry?: 'centroid' | 'simplified' | 'polygon';
 }
 
 export interface MapSummaryDatum {

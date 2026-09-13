@@ -60,10 +60,16 @@ export const propertyIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
+/** Hard cap on features returned by GET /api/map/properties (documented in README). */
+export const MAP_MAX_FEATURES = 5_000;
+
+/** Max bbox span per axis (degrees) accepted by /api/map/*. */
+export const MAP_MAX_BBOX_SPAN_DEG = 1;
+
 export const mapQuerySchema = z.object({
   bbox: bboxSchema,
   zoom: z.coerce.number().min(0).max(22).optional(),
-  limit: z.coerce.number().int().min(1).max(5_000).optional(),
+  limit: z.coerce.number().int().min(1).max(MAP_MAX_FEATURES).optional(),
 });
 
 export const mapSummarySchema = z.object({
@@ -111,13 +117,70 @@ export const trendPointSchema = z.object({
   property_count: numeric,
 });
 
+export type MapGeometryMode = 'centroid' | 'simplified' | 'polygon';
+
+/**
+ * Zoom-tier feature caps for viewport loads. Explicit `limit` still cannot exceed MAP_MAX_FEATURES.
+ * zoom < 11 → 400 | < 13 → 1_500 | < 15 → 4_000 | else → 5_000 (default without zoom: 2_000)
+ */
 export function mapLimitForZoom(zoom: number | undefined, explicit?: number): number {
-  if (explicit != null) return explicit;
+  if (explicit != null) return Math.min(explicit, MAP_MAX_FEATURES);
   if (zoom == null) return 2_000;
   if (zoom < 11) return 400;
   if (zoom < 13) return 1_500;
   if (zoom < 15) return 4_000;
-  return 5_000;
+  return MAP_MAX_FEATURES;
+}
+
+/** Geometry strategy by zoom: points at low zoom, simplified polygons mid, full parcels close-in. */
+export function mapGeometryMode(zoom: number | undefined): MapGeometryMode {
+  const z = zoom ?? 12;
+  if (z < 13) return 'centroid';
+  if (z < 15) return 'simplified';
+  return 'polygon';
+}
+
+/** Douglas-Peucker tolerance (degrees) for ST_SimplifyPreserveTopology at mid zooms. */
+export function mapSimplifyTolerance(zoom: number | undefined): number {
+  const z = zoom ?? 14;
+  if (z < 14) return 0.0003;
+  return 0.0001;
+}
+
+/** PostGIS expression selecting GeoJSON geometry for the given zoom mode (source: api.dashboard_map_properties). */
+export function mapGeomSqlExpression(mode: MapGeometryMode, zoom?: number): string {
+  if (mode === 'centroid') {
+    return 'ST_AsGeoJSON(centroid::geometry, 6)::jsonb';
+  }
+  if (mode === 'simplified') {
+    const tol = mapSimplifyTolerance(zoom);
+    return `ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom::geometry, ${tol}), 5)::jsonb`;
+  }
+  return 'ST_AsGeoJSON(geom::geometry, 6)::jsonb';
+}
+
+/** Clamp a viewport bbox to MAP_MAX_BBOX_SPAN_DEG centered on the same midpoint (client safety). */
+export function clampMapBbox(
+  bbox: [number, number, number, number],
+  maxSpan = MAP_MAX_BBOX_SPAN_DEG,
+): [number, number, number, number] {
+  let [minLng, minLat, maxLng, maxLat] = bbox;
+  const midLng = (minLng + maxLng) / 2;
+  const midLat = (minLat + maxLat) / 2;
+  if (maxLng - minLng > maxSpan) {
+    minLng = midLng - maxSpan / 2;
+    maxLng = midLng + maxSpan / 2;
+  }
+  if (maxLat - minLat > maxSpan) {
+    minLat = midLat - maxSpan / 2;
+    maxLat = midLat + maxSpan / 2;
+  }
+  return [
+    Math.max(-180, minLng),
+    Math.max(-90, minLat),
+    Math.min(180, maxLng),
+    Math.min(90, maxLat),
+  ];
 }
 
 export function likePattern(value: string): string {

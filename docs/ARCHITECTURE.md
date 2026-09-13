@@ -76,3 +76,8 @@ The owner-PII product is same-origin: `bun run build && bun run start` (or Rende
 GitHub Pages is a public static shell. `runtimeConfig.ownerPiiEnabled` is false on Pages builds, `VITE_API_KEY` is stripped, and the workflow must not inject a credential. Do not treat `github.io` as an authenticated records app.
 
 Render (`render.yaml`) still deploys `backend.ts` for API-only hosting. Point a same-origin frontend at that host, or serve the built SPA from `server.ts`.
+
+## Map viewport
+
+`GET /api/map/properties` requires a bbox (≤1° per axis) and optionally `zoom` / `limit`. Hard cap: **5000** features (`MAP_MAX_FEATURES`). Low zoom returns centroids; mid zoom simplifies polygons in PostGIS; high zoom returns full geometries. The dashboard MapLibre client viewport-loads on pan/zoom and clusters centroid points client-side. Source of truth remains `api.dashboard_map_properties`.
+

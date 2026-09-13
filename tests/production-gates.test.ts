@@ -2,7 +2,7 @@ import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/api/app.ts';
 import { evaluateIngestFreshness } from '../src/api/db/pool.ts';
-import { bboxSchema, mapLimitForZoom, mapQuerySchema } from '../src/api/schemas.ts';
+import { MAP_MAX_FEATURES, bboxSchema, mapLimitForZoom, mapQuerySchema } from '../src/api/schemas.ts';
 import { redactLogMeta } from '../src/server/httpDefaults.ts';
 
 const AUTH_KEYS = [
@@ -84,7 +84,7 @@ describe('map abuse bounds', () => {
   it('caps explicit map limits at 5000', () => {
     expect(mapQuerySchema.parse({ bbox: '-94.6,39.0,-94.5,39.1', limit: 5000 }).limit).toBe(5000);
     expect(() => mapQuerySchema.parse({ bbox: '-94.6,39.0,-94.5,39.1', limit: 20000 })).toThrow();
-    expect(mapLimitForZoom(18)).toBeLessThanOrEqual(5000);
+    expect(mapLimitForZoom(18)).toBeLessThanOrEqual(MAP_MAX_FEATURES);
   });
 });
 
