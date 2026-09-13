@@ -25,7 +25,8 @@
     "db:refresh": "db/refresh_materialized.sh",
     "db:backup": "scripts/backup-postgres.sh",
     "ops:health": "scripts/check-health.sh",
-    "ops:loadtest": "node scripts/loadtest-search.mjs"
+    "ops:loadtest": "node scripts/loadtest-search.mjs",
+    "db:restore-drill": "scripts/restore-drill.sh"
   },
   "dependencies": {
     "@google/genai": "^2.22.0",
