@@ -109,10 +109,10 @@ Authenticated deploy: `bun run build && bun run start` on one origin. The SPA sh
 | `GET /api/properties/export.csv` | required in production | CSV of current search filters; default **non-PII**; hard cap **10_000** rows |
 | `GET /api/properties/:id` | required in production | detail including owner PII |
 | `GET /api/map/*` | required in production | viewport GeoJSON (`bbox`/`zoom`; hard cap **5000** features) |
-| `POST /mcp`, `POST /api/mcp` | same protect as `/api` | JSON-RPC; `tools/call` is not mocked |
+| `POST /mcp`, `POST /api/mcp` | same protect as `/api` | JSON-RPC tool catalog; read-only `get_dashboard_summary` only (no owner PII). See [`docs/MCP.md`](docs/MCP.md). |
 | `GET /api/provider/*` | required except `/provider/status` | optional RentCast |
 
-Failures stay failures. MCP `tools/call` returns a JSON-RPC error. The explorer client (`ZillowMcpClient`) never converts abort/network/provider errors into `success: true`. Fixtures run only when `VITE_ALLOW_FIXTURE_ADAPTER=true` in a Vite dev build.
+MCP `tools/call` runs only the read-only catalog in [`docs/MCP.md`](docs/MCP.md) (`get_dashboard_summary` → `api.dashboard_summary` / `dashboard_readonly`). Owner-PII tool names are rejected; use REST `/api/properties/*`. Unknown tools and disabled MCP (`ENABLE_MCP=false`) stay fail-closed. The explorer client (`ZillowMcpClient`) never converts abort/network/provider errors into `success: true`. Fixtures run only when `VITE_ALLOW_FIXTURE_ADAPTER=true` in a Vite dev build.
 
 ## Map viewport loading
 

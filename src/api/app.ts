@@ -12,48 +12,9 @@ import authRouter from './routes/auth.js';
 import { createProviderRouter } from './routes/provider.js';
 import { apiRateLimit, accessLog, corsAllowList, piiRateLimit, requestId, securityHeaders } from '../server/httpDefaults.js';
 import { createProtectMiddleware, isPublicApiPath, mcpEnabled } from './auth.js';
+import { handleMcpJsonRpc } from './mcp.js';
 
 export { createProtectMiddleware, assertDashboardAuthConfigured } from './auth.js';
-
-const MCP_TOOLS = [
-  {
-    name: 'search_properties',
-    description: 'Search Jackson County properties by address, parcel, owner, and value filters.',
-    inputSchema: { type: 'object', properties: { q: { type: 'string' }, limit: { type: 'number' } } },
-  },
-  {
-    name: 'get_property',
-    description: 'Retrieve a county property record by integer property_id.',
-    inputSchema: { type: 'object', properties: { propertyId: { type: 'number' } }, required: ['propertyId'] },
-  },
-];
-
-function handleMcpJsonRpc(body: Record<string, unknown>) {
-  const method = body?.method;
-  const id = body?.id;
-  if (method === 'initialize') {
-    return {
-      jsonrpc: '2.0',
-      id,
-      result: {
-        protocolVersion: '2024-11-05',
-        capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: 'jackson-county-dashboard', version: '2.0.0' },
-      },
-    };
-  }
-  if (method === 'tools/list') {
-    return { jsonrpc: '2.0', id, result: { tools: MCP_TOOLS } };
-  }
-  if (method === 'tools/call') {
-    return {
-      jsonrpc: '2.0',
-      id,
-      error: { code: -32000, message: 'Use REST /api/properties/*; MCP tool execution is not mocked.' },
-    };
-  }
-  return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${String(method)}` } };
-}
 
 export function createApp(options: { enforceAuth?: boolean } = {}): express.Express {
   const app = express();
@@ -104,8 +65,12 @@ export function createApp(options: { enforceAuth?: boolean } = {}): express.Expr
   app.use('/api', createProviderRouter());
 
   if (mcpEnabled()) {
-    app.post(['/mcp', '/api/mcp'], protect, (req, res) => {
-      res.json(handleMcpJsonRpc(req.body || {}));
+    app.post(['/mcp', '/api/mcp'], protect, async (req, res, next) => {
+      try {
+        res.json(await handleMcpJsonRpc(req.body || {}));
+      } catch (err) {
+        next(err);
+      }
     });
   } else {
     const disabled: RequestHandler = (_req, res) => {

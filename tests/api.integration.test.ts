@@ -212,3 +212,41 @@ describe('properties export.csv', () => {
     }
   });
 });
+
+describe('MCP smoke', () => {
+  it('lists tools and returns a non-PII dashboard_summary aggregate', async () => {
+    const listRes = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+    assert.equal(listRes.status, 200);
+    const listBody = await listRes.json();
+    const names = (listBody.result.tools as Array<{ name: string }>).map((t) => t.name);
+    assert.deepEqual(names, ['get_dashboard_summary']);
+    assert.ok(!names.includes('search_properties'));
+    assert.ok(!names.includes('get_property'));
+
+    const callRes = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'get_dashboard_summary', arguments: {} },
+      }),
+    });
+    assert.equal(callRes.status, 200);
+    const callBody = await callRes.json();
+    assert.equal(callBody.error, undefined);
+    assert.ok(callBody.result?.content?.[0]?.text);
+    const payload = JSON.parse(callBody.result.content[0].text);
+    assert.ok(Number(payload.property_count) > 0 || Number(payload.total_properties) > 0);
+    assert.equal(payload.owner_pii, false);
+    assert.equal(payload.db_role, 'dashboard_readonly');
+    assert.equal(payload.owner_info, undefined);
+    assert.equal(payload.owner_mailing_address, undefined);
+  });
+});
+

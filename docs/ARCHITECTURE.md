@@ -51,7 +51,8 @@ Local/test processes without auth remain usable. Networked deploys must not.
 
 ## Fail-closed providers
 
-- `POST /mcp` and `POST /api/mcp` `tools/call` return a JSON-RPC error. They never return fixture rows as `success`.
+- `POST /mcp` and `POST /api/mcp` advertise a **read-only** tool catalog (`get_dashboard_summary` → `api.dashboard_summary`, role `dashboard_readonly`). Owner PII is never returned over MCP; `search_properties` / `get_property` names return a JSON-RPC error pointing at REST. See `docs/MCP.md`.
+- `ENABLE_MCP=false` returns HTTP 404 `mcp_disabled`. Production leaves MCP off unless `ENABLE_MCP=true`.
 - `POST /api/zillow/mcp` returns 503/502 when the provider is missing or fails.
 - `ZillowMcpClient` propagates abort, HTTP, and network errors as `success: false`. Fixtures require an explicit `VITE_ALLOW_FIXTURE_ADAPTER=true` **dev** flag.
 

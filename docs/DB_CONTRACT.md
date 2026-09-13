@@ -88,7 +88,7 @@ Grants: `PUBLIC` is revoked on schema `api`. Role `dashboard_app` can SELECT all
 
 | View | Endpoint |
 |---|---|
-| `api.dashboard_summary` | `GET /api/dashboard/summary` |
+| `api.dashboard_summary` | `GET /api/dashboard/summary`; MCP `get_dashboard_summary` (`docs/MCP.md`) |
 | `api.dashboard_property_search` | `GET /api/properties/search`, `GET /api/properties/export.csv` (non-PII columns by default; PII needs confirm + `dashboard_app`) |
 | `api.dashboard_property_detail` | `GET /api/properties/:id` |
 | `api.dashboard_value_trends` | `GET /api/market/trends` |
