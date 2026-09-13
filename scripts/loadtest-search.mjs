@@ -2,6 +2,10 @@
 /**
  * Concurrent search/map probe against a running same-origin API.
  * Usage: BASE_URL=http://127.0.0.1:3000 AUTH_USER=u AUTH_PASSWORD=p node scripts/loadtest-search.mjs
+ *
+ * Hits dashboard summary, property search, and map viewport — the same search-heavy
+ * surfaces guarded by per-principal API_RATE_LIMIT_PER_MINUTE / PII_RATE_LIMIT_PER_MINUTE.
+ * A single-session burst above those knobs yields structured 429s (counted in `errors`).
  */
 const base = process.env.BASE_URL || 'http://127.0.0.1:3000';
 const user = process.env.AUTH_USER || '';

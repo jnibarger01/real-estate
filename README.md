@@ -150,6 +150,24 @@ Default columns omit `owner_info` and `owner_mailing_address`. Including PII als
 
 See `resolveExportColumns` / `CSV_EXPORT_MAX_ROWS` in `src/api/csvExport.ts`.
 
+
+## Rate limiting
+
+Authenticated search and dashboard routes are rate-limited **per principal** (session username, validated Basic user, or shared `API_KEY`; unauthenticated clients fall back to IP). Limits use a 60-second sliding window via `express-rate-limit`.
+
+| Knob | Default | Applies to |
+|---|---|---|
+| `API_RATE_LIMIT_PER_MINUTE` | `60` | All `/api/*` (including `/api/dashboard/*`) |
+| `PII_RATE_LIMIT_PER_MINUTE` | `30` | `/api/properties/*` and `/api/map/*` (stacked with the general limit) |
+
+Exceeded requests return HTTP **429** with structured JSON:
+
+```json
+{ "success": false, "error": "rate_limit_exceeded", "message": "Too many requests. Please retry shortly.", "requestId": "…" }
+```
+
+`RateLimit-*` draft-7 headers are included. Probe concurrency with `bun run ops:loadtest` (`scripts/loadtest-search.mjs`); expect 429s when a single principal bursts above the knobs.
+
 ## Render
 
 `render.yaml` deploys `backend.ts` (`createApp()`, no Vite). Set `DATABASE_URL`, `DASHBOARD_AUTH_USER`, `DASHBOARD_AUTH_PASSWORD`, and `ALLOWED_ORIGINS`. Confirm `/api/health` reports `queryReadiness.ok: true` before pointing Pages at the service.
