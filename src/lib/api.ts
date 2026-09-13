@@ -27,6 +27,13 @@ export interface DashboardSummary {
   yoy_to_year: number | null;
   queried_at?: string;
   refreshed_at?: string | null;
+  ingest_freshness?: {
+    ok: boolean;
+    source: string;
+    refreshedAt: string | null;
+    ageHours: number | null;
+    maxAgeHours: number;
+  };
 }
 
 export interface ValueDistributionDatum {
@@ -259,8 +266,11 @@ export function toNumber(v: number | string | null | undefined): number {
   return typeof v === 'number' ? v : Number(v);
 }
 
+export type IngestFreshnessResponse = NonNullable<DashboardSummary['ingest_freshness']>;
+
 export const api = {
   summary: () => request<DashboardSummary>('/api/dashboard/summary'),
+  ingestFreshness: () => request<IngestFreshnessResponse>('/api/dashboard/ingest-freshness'),
   valueDistribution: () => request<ValueDistributionDatum[]>('/api/dashboard/value-distribution'),
   salesTrends: () => request<SalesTrendDatum[]>('/api/dashboard/sales-trends'),
   propertyTypes: () => request<PropertyTypeDatum[]>('/api/dashboard/property-types'),

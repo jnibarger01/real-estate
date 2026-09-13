@@ -97,7 +97,7 @@ Grants: `PUBLIC` is revoked on schema `api`. Role `dashboard_app` can SELECT all
 | `api.dashboard_property_types` | `GET /api/dashboard/distributions?dimension=property_type` |
 | `api.dashboard_value_bands` | `GET /api/dashboard/distributions?dimension=value_band` |
 | `api.dashboard_assessment_classes` | `GET /api/dashboard/distributions?dimension=assessment_class` |
-| `api.ingest_state` | `refreshed_at` on `GET /api/dashboard/summary` |
+| `api.ingest_state` | `refreshed_at` + `ingest_freshness` on `GET /api/dashboard/summary`; also `GET /api/dashboard/ingest-freshness` |
 
 `GET /api/sales` returns assessor `recording_num` rows only and labels them as recording references, not market sales.
 

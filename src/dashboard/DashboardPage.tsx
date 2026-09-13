@@ -17,6 +17,7 @@ import PropertyExplorer from './PropertyExplorer';
 import PropertyMap from './PropertyMap';
 import DashboardFilters, { type DashboardFiltersState } from './DashboardFilters';
 import SavedSearches from './SavedSearches';
+import IngestFreshnessBadge from './IngestFreshnessBadge';
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
@@ -56,17 +57,23 @@ export default function DashboardPage() {
                 {isLoading ? 'Loading market data…' : `${formatNumber(toNumber(summary.data?.total_properties))} residential parcels across Jackson County, MO. Data source: jackson-county-gis`}
               </p>
             </div>
-            {session?.authRequired && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void logout()}
-                data-testid="logout-button"
-              >
-                Log out
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <IngestFreshnessBadge
+                loading={summary.isLoading}
+                freshness={summary.data?.ingest_freshness}
+              />
+              {session?.authRequired && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void logout()}
+                  data-testid="logout-button"
+                >
+                  Log out
+                </Button>
+              )}
+            </div>
           </div>
           <DashboardFilters value={filters} onChange={setFilters} className="mt-4" />
           <SavedSearches filters={filters} onApply={setFilters} />

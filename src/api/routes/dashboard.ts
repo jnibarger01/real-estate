@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { queryMany, queryOne } from '../db/pool.js';
+import { evaluateIngestFreshness, queryMany, queryOne } from '../db/pool.js';
 import {
   createSavedSearchSchema,
   distributionsQuerySchema,
@@ -73,12 +73,7 @@ router.get('/dashboard/summary', async (_req, res, next) => {
       `SELECT refreshed_at FROM api.ingest_state WHERE source = $1`,
       ['mart.residential_properties']
     ).catch(() => undefined);
-    const refreshedAt =
-      ingest?.refreshed_at instanceof Date
-        ? ingest.refreshed_at.toISOString()
-        : ingest?.refreshed_at
-          ? String(ingest.refreshed_at)
-          : null;
+    const ingestFreshness = evaluateIngestFreshness(ingest?.refreshed_at ?? null);
     const body = summaryResponseSchema.parse({
       property_count: row.property_count ?? row.total_properties,
       total_properties: row.total_properties ?? row.property_count,
@@ -100,9 +95,22 @@ router.get('/dashboard/summary', async (_req, res, next) => {
       yoy_from_year: latest ? Number(latest.year) - 1 : null,
       yoy_to_year: latest ? Number(latest.year) : null,
       queried_at: new Date().toISOString(),
-      refreshed_at: refreshedAt,
+      refreshed_at: ingestFreshness.refreshedAt,
+      ingest_freshness: ingestFreshness,
     });
     res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/dashboard/ingest-freshness', async (_req, res, next) => {
+  try {
+    const ingest = await queryOne<{ refreshed_at: Date | string }>(
+      `SELECT refreshed_at FROM api.ingest_state WHERE source = $1`,
+      ['mart.residential_properties'],
+    ).catch(() => undefined);
+    res.json(evaluateIngestFreshness(ingest?.refreshed_at ?? null));
   } catch (err) {
     next(err);
   }

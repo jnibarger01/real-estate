@@ -45,7 +45,8 @@ export interface DatabaseValidation {
 }
 
 export function ingestMaxAgeHours(): number {
-  const raw = Number(process.env.INGEST_MAX_AGE_HOURS);
+  // INGEST_SLA_HOURS is the preferred name; INGEST_MAX_AGE_HOURS kept for back-compat.
+  const raw = Number(process.env.INGEST_SLA_HOURS ?? process.env.INGEST_MAX_AGE_HOURS);
   return Number.isFinite(raw) ? Math.max(0, raw) : 168;
 }
 
