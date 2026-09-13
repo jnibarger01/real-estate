@@ -151,7 +151,7 @@ export default function SavedSearches({ filters, onApply }: Props) {
                 data-search-id={item.id}
               >
                 <span className="font-medium">{item.label}</span>
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-xs text-slate-500">
                   {Object.entries(item.query_params)
                     .map(([k, v]) => `${k}=${v}`)
                     .join(' · ') || 'empty'}

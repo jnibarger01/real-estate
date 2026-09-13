@@ -27,7 +27,7 @@ export default function IngestFreshnessBadge({ freshness, loading }: Props) {
     return (
       <Badge
         variant="outline"
-        className="border-slate-200 bg-slate-50 text-slate-400"
+        className="border-slate-200 bg-slate-50 text-slate-500"
         data-testid="ingest-freshness-badge"
         data-status="loading"
       >

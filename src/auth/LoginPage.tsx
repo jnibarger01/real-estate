@@ -29,7 +29,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] px-4" data-testid="login-page">
       <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-2">
-          <Building2 className="size-6 text-violet-700" />
+          <Building2 className="size-6 text-violet-700" aria-hidden="true" />
           <h1 className="text-xl font-bold text-slate-900">Sign in</h1>
         </div>
         <p className="mb-6 text-sm text-slate-500">
