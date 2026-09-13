@@ -100,3 +100,9 @@ Grants: `PUBLIC` is revoked on schema `api`. Role `dashboard_app` can SELECT all
 | `api.ingest_state` | `refreshed_at` on `GET /api/dashboard/summary` |
 
 `GET /api/sales` returns assessor `recording_num` rows only and labels them as recording references, not market sales.
+
+## Authenticated app tables
+
+| Table | Endpoint | Notes |
+|---|---|---|
+| `api.saved_searches` | `GET/POST/DELETE /api/dashboard/saved-searches` | Per-user filter bookmarks (`username`, `label`, `query_params` jsonb). No owner PII columns. Apply `sql/api_saved_searches.sql`. |

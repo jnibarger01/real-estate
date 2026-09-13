@@ -18,7 +18,7 @@
     "test:e2e": "playwright test",
     "db:contract": "bin/create-dashboard-contract.sh",
     "test:watch": "vitest",
-    "db:views": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/api_dashboard_views.sql",
+    "db:views": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/api_dashboard_views.sql && psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/api_saved_searches.sql",
     "db:indexes": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/spatial_indexes.sql",
     "db:promote": "psql -d jacen_dev -v ON_ERROR_STOP=1 -f sql/promote_raw_to_mart.sql",
     "db:refresh": "db/refresh_materialized.sh",

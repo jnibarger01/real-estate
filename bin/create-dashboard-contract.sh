@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SQL="$ROOT/sql/api_dashboard_views.sql"
+SAVED="$ROOT/sql/api_saved_searches.sql"
 
 if [[ -n "${DATABASE_URL:-}" ]]; then
   PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1)
@@ -18,6 +19,8 @@ fi
 
 echo "==> Applying api.dashboard_* contract to $TARGET"
 "${PSQL[@]}" -f "$SQL"
+echo "==> Applying api.saved_searches table"
+"${PSQL[@]}" -f "$SAVED"
 
 echo "==> Verifying api.dashboard_* views"
 "${PSQL[@]}" -c "

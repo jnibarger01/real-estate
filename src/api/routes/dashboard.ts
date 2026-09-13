@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { queryMany, queryOne } from '../db/pool.js';
 import {
+  createSavedSearchSchema,
   distributionsQuerySchema,
   likePattern,
   mapGeomSqlExpression,
@@ -15,10 +16,17 @@ import {
   mapSummarySchema,
   propertyIdParamSchema,
   salesQuerySchema,
+  savedSearchIdParamSchema,
   searchQuerySchema,
   summaryResponseSchema,
   trendPointSchema,
 } from '../schemas.js';
+import { resolveDashboardUsername } from '../auth.js';
+import {
+  createSavedSearch,
+  deleteSavedSearch,
+  listSavedSearches,
+} from '../savedSearchesStore.js';
 
 const router = Router();
 
@@ -388,6 +396,47 @@ router.get('/map/summary', async (req, res, next) => {
       [minLng, minLat, maxLng, maxLat]
     );
     res.json(rows.map((r) => ({ ...r, property_count: Number(r.property_count) })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+router.get('/dashboard/saved-searches', async (req, res, next) => {
+  try {
+    const username = resolveDashboardUsername(req);
+    if (!username) return res.status(401).json({ error: 'unauthorized' });
+    const items = await listSavedSearches(username);
+    res.json({ items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/dashboard/saved-searches', async (req, res, next) => {
+  try {
+    const username = resolveDashboardUsername(req);
+    if (!username) return res.status(401).json({ error: 'unauthorized' });
+    const parsed = createSavedSearchSchema.parse(req.body ?? {});
+    const row = await createSavedSearch({
+      username,
+      label: parsed.label,
+      query_params: parsed.query_params,
+    });
+    res.status(201).json(row);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/dashboard/saved-searches/:id', async (req, res, next) => {
+  try {
+    const username = resolveDashboardUsername(req);
+    if (!username) return res.status(401).json({ error: 'unauthorized' });
+    const { id } = savedSearchIdParamSchema.parse(req.params);
+    const deleted = await deleteSavedSearch(username, id);
+    if (!deleted) return res.status(404).json({ error: 'not_found', message: 'Saved search not found' });
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

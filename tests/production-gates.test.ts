@@ -110,3 +110,12 @@ describe('bbox helper still validates order', () => {
     expect(() => bboxSchema.parse('-94,39,-95,38')).toThrow();
   });
 });
+
+describe('saved search PII boundary', () => {
+  it('zod create schema does not allow owner keys in query_params', async () => {
+    const { createSavedSearchSchema } = await import('../src/api/schemas.ts');
+    expect(() =>
+      createSavedSearchSchema.parse({ label: 'x', query_params: { owner: 'NOPE' } }),
+    ).toThrow();
+  });
+});
