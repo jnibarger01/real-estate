@@ -137,6 +137,13 @@ export const summaryResponseSchema = z.object({
   yoy_to_year: numeric.nullable(),
   queried_at: z.string(),
   refreshed_at: z.string().nullable(),
+  ingest_freshness: z.object({
+    ok: z.boolean(),
+    source: z.string(),
+    refreshedAt: z.string().nullable(),
+    ageHours: z.number().nullable(),
+    maxAgeHours: z.number(),
+  }),
 });
 
 export const trendPointSchema = z.object({

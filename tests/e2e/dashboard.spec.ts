@@ -44,6 +44,13 @@ test('authenticated same-origin dashboard loads live API data', async ({ page })
   const yoy = page.getByTestId('kpi-yoy');
   await expect(yoy).toContainText(/[+-]?\d+\.\d{2}%/);
   await expect(yoy).toContainText(/Avg market value, 20\d{2} vs 20\d{2}/);
+
+  const badge = page.getByTestId('ingest-freshness-badge');
+  await expect(badge).toBeVisible();
+  const stamped = await badge.getAttribute('data-refreshed-at');
+  expect(stamped).toBeTruthy();
+  await expect(badge).toContainText(stamped!.slice(0, 10)); // YYYY-MM-DD from ingest_state
+  await expect(badge).toContainText(/Fresh|Stale|Unknown/);
 });
 
 test('logout clears client state and returns to login', async ({ page }) => {

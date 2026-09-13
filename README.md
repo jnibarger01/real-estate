@@ -69,6 +69,8 @@ db/refresh_materialized.sh
 
 That refreshes `mart.residential_properties` and stamps `api.ingest_state`.
 
+DashboardApp shows an ingest freshness badge (timestamp + Fresh/Stale) from that stamp. Warn styling uses `INGEST_SLA_HOURS` (alias `INGEST_MAX_AGE_HOURS`; default 168).
+
 See `docs/DB_CONTRACT.md` and `docs/ARCHITECTURE.md`.
 
 ## Environment
@@ -95,7 +97,7 @@ Authenticated deploy: `bun run build && bun run start` on one origin. The SPA sh
 
 | Path | Auth | Purpose |
 |---|---|---|
-| `GET /api/health`, `/health`, `/healthz` | public | process + Postgres + PostGIS + `api.dashboard_*` readiness |
+| `GET /api/health`, `/health`, `/healthz` | public | process + Postgres + PostGIS + `api.dashboard_*` + ingest freshness |
 | `GET/POST /api/auth/session|login|logout|touch` | public | SPA session cookie lifecycle (`SESSION_TTL_MS`) |
 | `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
 | `GET/POST/DELETE /api/dashboard/saved-searches` | required in production | Authenticated filter bookmarks (no owner PII columns) |

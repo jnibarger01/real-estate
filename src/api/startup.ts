@@ -4,7 +4,7 @@
  */
 
 import { assertDashboardAuthConfigured } from './auth.js';
-import { pool, validateDatabaseOrThrow } from './db/pool.js';
+import { ingestMaxAgeHours, pool, validateDatabaseOrThrow } from './db/pool.js';
 
 export async function assertProductionReady(): Promise<void> {
   if (process.env.NODE_ENV !== 'production') return;
@@ -15,7 +15,7 @@ export async function assertProductionReady(): Promise<void> {
       `Missing required api.dashboard_* objects: ${inspection.queryReadiness.missing.join(', ')}. Apply sql/api_dashboard_views.sql.`,
     );
   }
-  if (process.env.INGEST_MAX_AGE_HOURS !== '0' && !inspection.ingestFreshness.ok) {
+  if (ingestMaxAgeHours() !== 0 && !inspection.ingestFreshness.ok) {
     throw new Error(
       `Ingest stamp is stale or missing (maxAgeHours=${inspection.ingestFreshness.maxAgeHours}). Run db/refresh_materialized.sh.`,
     );

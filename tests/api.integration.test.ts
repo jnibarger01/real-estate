@@ -62,6 +62,22 @@ describe('dashboard summary', () => {
     assert.ok(body.total_market_value > 0);
     assert.ok(body.yoy_to_year == null || body.yoy_to_year >= body.yoy_from_year);
     assert.ok(body.queried_at);
+    assert.ok(body.refreshed_at);
+    assert.ok(body.ingest_freshness);
+    assert.equal(body.ingest_freshness.source, 'mart.residential_properties');
+    assert.equal(body.ingest_freshness.refreshedAt, body.refreshed_at);
+    assert.equal(typeof body.ingest_freshness.ok, 'boolean');
+  });
+});
+
+describe('dashboard ingest-freshness', () => {
+  it('returns the stamped time from api.ingest_state', async () => {
+    const { status, body } = await json('/api/dashboard/ingest-freshness');
+    assert.equal(status, 200);
+    assert.equal(body.source, 'mart.residential_properties');
+    assert.ok(body.refreshedAt);
+    assert.equal(typeof body.ok, 'boolean');
+    assert.equal(typeof body.maxAgeHours, 'number');
   });
 });
 
