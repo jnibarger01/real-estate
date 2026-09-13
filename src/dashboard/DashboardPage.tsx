@@ -17,8 +17,11 @@ import PropertyExplorer from './PropertyExplorer';
 import PropertyMap from './PropertyMap';
 import DashboardFilters, { type DashboardFiltersState } from './DashboardFilters';
 import { useState } from 'react';
+import { Button } from '../components/ui/button';
+import { useAuth } from '../auth/AuthContext';
 
 export default function DashboardPage() {
+  const { logout, session } = useAuth();
   const [filters, setFilters] = useState<DashboardFiltersState>({});
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
@@ -42,14 +45,27 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-          <div className="flex flex-col gap-2">
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
-              <Building2 className="size-6 text-violet-700" />
-              Jackson County Property Intelligence
-            </h1>
-            <p className="text-sm text-slate-500">
-              {isLoading ? 'Loading market data…' : `${formatNumber(toNumber(summary.data?.total_properties))} residential parcels across Jackson County, MO. Data source: jackson-county-gis`}
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-2">
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+                <Building2 className="size-6 text-violet-700" />
+                Jackson County Property Intelligence
+              </h1>
+              <p className="text-sm text-slate-500">
+                {isLoading ? 'Loading market data…' : `${formatNumber(toNumber(summary.data?.total_properties))} residential parcels across Jackson County, MO. Data source: jackson-county-gis`}
+              </p>
+            </div>
+            {session?.authRequired && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void logout()}
+                data-testid="logout-button"
+              >
+                Log out
+              </Button>
+            )}
           </div>
           <DashboardFilters value={filters} onChange={setFilters} className="mt-4" />
         </div>
@@ -69,8 +85,8 @@ export default function DashboardPage() {
         )}
         {unauthorized && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert" data-testid="auth-required">
-            Sign-in is required. Reload this origin and complete HTTP Basic authentication. A static Pages
-            client cannot carry a usable API key.
+            Sign-in is required. Your session may have expired — use Log out / Sign in to continue. A static
+            Pages client cannot carry a usable API key.
           </div>
         )}
         {hasError && !unauthorized && (

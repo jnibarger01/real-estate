@@ -17,7 +17,7 @@ function waitForServer(child) {
   });
 }
 
-test('configured basic auth protects dashboard UI and API', async () => {
+test('configured auth protects dashboard API; SPA document stays reachable for login', async () => {
   const child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: process.cwd(),
     env: {
@@ -26,6 +26,7 @@ test('configured basic auth protects dashboard UI and API', async () => {
       DISABLE_HMR: 'true',
       DASHBOARD_AUTH_USER: 'dashboard-user',
       DASHBOARD_AUTH_PASSWORD: 'dashboard-pass',
+      SESSION_SECRET: 'dashboard-auth-test-secret',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -36,8 +37,8 @@ test('configured basic auth protects dashboard UI and API', async () => {
     assert.equal(denied.status, 401);
     assert.match(denied.headers.get('www-authenticate') ?? '', /Basic/);
 
-    const deniedPage = await fetch(`http://127.0.0.1:${port}/`);
-    assert.equal(deniedPage.status, 401);
+    const loginPage = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(loginPage.status, 200);
 
     const authorization = `Basic ${Buffer.from('dashboard-user:dashboard-pass').toString('base64')}`;
     const allowed = await fetch(`http://127.0.0.1:${port}/api/dashboard/summary`, {
@@ -46,6 +47,15 @@ test('configured basic auth protects dashboard UI and API', async () => {
     assert.equal(allowed.status, 200);
     const body = await allowed.json();
     assert.ok(Number(body.total_properties) > 0);
+
+    const sessionLogin = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'dashboard-user', password: 'dashboard-pass' }),
+    });
+    assert.equal(sessionLogin.status, 200);
+    const setCookie = sessionLogin.headers.getSetCookie?.() ?? [];
+    assert.ok(setCookie.some((c) => c.startsWith('dashboard_session=')));
   } finally {
     child.kill('SIGTERM');
   }

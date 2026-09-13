@@ -8,9 +8,10 @@ import { ZodError } from 'zod';
 import { GoogleGenAI, Type } from '@google/genai';
 import { inspectDatabase } from './db/pool.js';
 import dashboardRouter from './routes/dashboard.js';
+import authRouter from './routes/auth.js';
 import { createProviderRouter } from './routes/provider.js';
 import { apiRateLimit, accessLog, corsAllowList, piiRateLimit, requestId, securityHeaders } from '../server/httpDefaults.js';
-import { createProtectMiddleware, mcpEnabled } from './auth.js';
+import { createProtectMiddleware, isPublicApiPath, mcpEnabled } from './auth.js';
 
 export { createProtectMiddleware, assertDashboardAuthConfigured } from './auth.js';
 
@@ -95,9 +96,10 @@ export function createApp(options: { enforceAuth?: boolean } = {}): express.Expr
   app.get('/health', healthHandler);
 
   app.use('/api', (req, res, next) => {
-    if (req.path === '/health' || req.path === '/provider/status') return next();
+    if (isPublicApiPath(req.path)) return next();
     return protect(req, res, next);
   });
+  app.use('/api', authRouter);
   app.use('/api', dashboardRouter);
   app.use('/api', createProviderRouter());
 

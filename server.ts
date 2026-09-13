@@ -9,9 +9,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-import { createApp, createProtectMiddleware } from './src/api/app.js';
+import { createApp } from './src/api/app.js';
 import { inspectDatabase } from './src/api/db/pool.js';
-import { isUnauthenticatedPublicPath } from './src/api/auth.js';
 import { assertProductionReady } from './src/api/startup.js';
 
 dotenv.config();
@@ -30,13 +29,8 @@ async function startServer() {
     console.warn('Database connected but query readiness is degraded:', inspection);
   }
 
-  const protectSpa = createProtectMiddleware();
-  app.use((req, res, next) => {
-    if (isUnauthenticatedPublicPath(req.path) || req.path.startsWith('/api') || req.path === '/mcp') {
-      return next();
-    }
-    return protectSpa(req, res, next);
-  });
+  // SPA document is public; /api/* (except health/auth) requires session, Basic, or API key.
+  // This enables login UI, idle warning, and logout without browser-cached Basic credentials.
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

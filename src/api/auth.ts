@@ -5,6 +5,7 @@
 
 import type { RequestHandler } from 'express';
 import { timingSafeEqual } from 'node:crypto';
+import { readSessionFromRequest } from './session.js';
 
 function constantTimeEqual(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(left);
@@ -56,6 +57,14 @@ function matchesBasicUser(username: string, password: string): boolean {
   return matched;
 }
 
+/** Validate dashboard login credentials (Basic users and/or API_KEY). */
+export function validateDashboardCredentials(username: string, password: string, apiKey?: string): boolean {
+  if (username && password && matchesBasicUser(username, password)) return true;
+  const configured = process.env.API_KEY?.trim();
+  if (apiKey && configured && constantTimeEqual(apiKey, configured)) return true;
+  return false;
+}
+
 export function createProtectMiddleware(options: { enforceAuth?: boolean } = {}): RequestHandler {
   const enforceAuth = shouldEnforceDashboardAuth(options.enforceAuth);
   if (enforceAuth) assertDashboardAuthConfigured();
@@ -76,6 +85,9 @@ export function createProtectMiddleware(options: { enforceAuth?: boolean } = {})
       if (provided && constantTimeEqual(provided, apiKey)) return next();
     }
 
+    const session = readSessionFromRequest(req);
+    if (session) return next();
+
     if (users.length > 0) {
       const authorization = req.get('authorization');
       if (authorization?.startsWith('Basic ')) {
@@ -87,6 +99,7 @@ export function createProtectMiddleware(options: { enforceAuth?: boolean } = {})
           if (matchesBasicUser(username, password)) return next();
         }
       }
+      // Prefer session/login UX for browsers; still advertise Basic for API clients.
       res.set('WWW-Authenticate', 'Basic realm="Jackson County Property Intelligence"');
     }
 
@@ -95,7 +108,27 @@ export function createProtectMiddleware(options: { enforceAuth?: boolean } = {})
 }
 
 export function isUnauthenticatedPublicPath(path: string): boolean {
-  return path === '/health' || path === '/healthz' || path === '/api/health' || path === '/api/provider/status';
+  return (
+    path === '/health' ||
+    path === '/healthz' ||
+    path === '/api/health' ||
+    path === '/api/provider/status' ||
+    path === '/api/auth/login' ||
+    path === '/api/auth/logout' ||
+    path === '/api/auth/session' ||
+    path === '/api/auth/touch'
+  );
+}
+
+export function isPublicApiPath(path: string): boolean {
+  return (
+    path === '/health' ||
+    path === '/provider/status' ||
+    path === '/auth/login' ||
+    path === '/auth/logout' ||
+    path === '/auth/session' ||
+    path === '/auth/touch'
+  );
 }
 
 export function mcpEnabled(): boolean {
