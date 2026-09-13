@@ -133,12 +133,7 @@ jobs:
             exit 1
           fi
 
-      - name: Pages bundle must not include VITE_API_KEY
+      - name: Pages vs authenticated product split guard
         env:
           VITE_API_BASE_URL: https://example.invalid
-        run: |
-          bun run build:pages
-          if grep -R -E 'VITE_API_KEY' dist; then
-            echo 'Pages build leaked VITE_API_KEY identifier' >&2
-            exit 1
-          fi
+        run: bash scripts/check-pages-auth-split.sh

@@ -174,7 +174,9 @@ Exceeded requests return HTTP **429** with structured JSON:
 
 ## GitHub Pages
 
-Pages is not the authenticated product. The workflow may inject a public `VITE_API_BASE_URL` and **never** injects `VITE_API_KEY`. The UI states that owner records are only available on the same-origin API deploy. Compiled Pages output is rejected if it contains `VITE_API_KEY`.
+Pages is not the authenticated product. The workflow may inject a public `VITE_API_BASE_URL` and **never** injects `VITE_API_KEY` or other secret-named Vite env (`VITE_*PASSWORD*`, `VITE_*SECRET*`, `VITE_DASHBOARD_*`, provider keys, `SESSION_SECRET`, etc.). The UI states that owner records are only available on the same-origin API deploy.
+
+CI runs `scripts/check-pages-auth-split.sh` so an accidental secret-named Vite env fails the build. Allowed vs forbidden env is listed in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Pages vs authenticated product checklist).
 
 ## Tests
 

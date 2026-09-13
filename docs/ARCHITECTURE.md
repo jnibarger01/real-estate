@@ -75,6 +75,20 @@ The owner-PII product is same-origin: `bun run build && bun run start` (or Rende
 
 GitHub Pages is a public static shell. `runtimeConfig.ownerPiiEnabled` is false on Pages builds, `VITE_API_KEY` is stripped, and the workflow must not inject a credential. Do not treat `github.io` as an authenticated records app.
 
+### Pages vs authenticated product — env checklist
+
+| Surface | Allowed in Pages build | Forbidden in Pages build / bundle |
+|---|---|---|
+| Vite public config | `VITE_API_BASE_URL` (public API origin only) | Any secret-named `VITE_*` (see below) |
+| Dashboard auth | — (server-only on same-origin deploy) | `DASHBOARD_AUTH_USER`, `DASHBOARD_AUTH_PASSWORD`, `DASHBOARD_AUTH_USERS` |
+| API / session | — | `API_KEY`, `SESSION_SECRET`, `VITE_API_KEY` |
+| Providers | — | `RENTCAST_API_KEY`, `GEMINI_API_KEY`, `VITE_RENTCAST_*`, `VITE_GEMINI_*` |
+| Fixtures | — | `VITE_ALLOW_FIXTURE_ADAPTER` (dev-only; never Pages) |
+
+**Forbidden Vite name families for Pages:** `VITE_API_KEY`, `VITE_*PASSWORD*`, `VITE_*SECRET*`, `VITE_*TOKEN*`, `VITE_*_KEY`, `VITE_DASHBOARD_*`, `VITE_SESSION_*`, `VITE_RENTCAST_*`, `VITE_GEMINI_*`, `VITE_BRIDGE_*`, `VITE_RESO_*`, `VITE_ALLOW_FIXTURE_ADAPTER`. The only Pages-allowed Vite env is `VITE_API_BASE_URL`.
+
+CI enforces the split with `scripts/check-pages-auth-split.sh`: workflow/source policy, a Pages build poisoned with canary secret-named Vite env, and a `dist/` scan that fails if those canaries or dashboard/API secret identifiers appear. Accidentally adding a secret-named Vite env to the Pages workflow or embedding it in the bundle fails CI.
+
 Render (`render.yaml`) still deploys `backend.ts` for API-only hosting. Point a same-origin frontend at that host, or serve the built SPA from `server.ts`.
 
 ## Map viewport
