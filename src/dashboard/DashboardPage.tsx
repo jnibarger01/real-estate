@@ -50,7 +50,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex flex-col gap-2">
               <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
-                <Building2 className="size-6 text-violet-700" />
+                <Building2 className="size-6 text-violet-700" aria-hidden="true" />
                 Jackson County Property Intelligence
               </h1>
               <p className="text-sm text-slate-500">
@@ -144,7 +144,7 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-sm text-slate-500">Average Market Value</CardTitle>
-              <p className="text-xs text-slate-400">Five-year trend, all residential parcels</p>
+              <p className="text-xs text-slate-500">Five-year trend, all residential parcels</p>
             </CardHeader>
             <CardContent>
               {trends.isLoading ? (
@@ -158,7 +158,7 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-sm text-slate-500">Market Value Distribution</CardTitle>
-              <p className="text-xs text-slate-400">Parcel count by market value bucket</p>
+              <p className="text-xs text-slate-500">Parcel count by market value bucket</p>
             </CardHeader>
             <CardContent>
               {distribution.isLoading ? (
@@ -175,7 +175,7 @@ export default function DashboardPage() {
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="text-sm text-slate-500">Property Type Mix</CardTitle>
-              <p className="text-xs text-slate-400">By land-use category</p>
+              <p className="text-xs text-slate-500">By land-use category</p>
             </CardHeader>
             <CardContent>
               {types.isLoading ? (
@@ -190,7 +190,7 @@ export default function DashboardPage() {
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-sm text-slate-500">Property Map</CardTitle>
-                <p className="text-xs text-slate-400">Pan/zoom to query parcels by map bounds</p>
+                <p className="text-xs text-slate-500">Pan/zoom to query parcels by map bounds</p>
               </div>
             </CardHeader>
             <CardContent>

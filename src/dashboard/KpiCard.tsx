@@ -18,14 +18,14 @@ export default function KpiCard({ icon, label, value, help, trend, testId }: Kpi
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <span className="text-sm text-slate-500">{label}</span>
-          <span className={cn('text-slate-400', trend !== undefined && (trend >= 0 ? 'text-emerald-600' : 'text-rose-600'))}>
+          <span className={cn('text-slate-500', trend !== undefined && (trend >= 0 ? 'text-emerald-600' : 'text-rose-600'))}>
             {icon}
           </span>
         </div>
         <div className="mt-2 text-2xl font-bold tracking-tight">
           {value === undefined ? <Skeleton className="h-8 w-28" /> : value}
         </div>
-        {help && <p className="mt-1 text-xs text-slate-400">{help}</p>}
+        {help && <p className="mt-1 text-xs text-slate-500">{help}</p>}
       </CardContent>
     </Card>
   );
