@@ -282,6 +282,43 @@ export const api = {
     }),
   deleteSavedSearch: (id: string) =>
     mutateRequest<void>(`/api/dashboard/saved-searches/${id}`, { method: 'DELETE' }),
+  /**
+   * Download CSV for the current search filters.
+   * Owner PII columns require includePii + confirmPii (server also checks dashboard_app role).
+   */
+  exportSearchCsv: async (
+    filters: SearchFilters,
+    options: { includePii?: boolean; confirmPii?: boolean; limit?: number } = {},
+  ): Promise<{ filename: string; rowCount: number; includePii: boolean }> => {
+    const url = new URL(runtimeConfig.apiUrl('/api/properties/export.csv'), window.location.origin);
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== '' && k !== 'offset' && k !== 'limit') url.searchParams.set(k, String(v));
+    }
+    if (options.limit != null) url.searchParams.set('limit', String(options.limit));
+    if (options.includePii) url.searchParams.set('include_pii', 'true');
+    if (options.confirmPii) url.searchParams.set('confirm_pii', 'true');
+    const headers: HeadersInit = {};
+    if (runtimeConfig.apiKey) headers['x-api-key'] = runtimeConfig.apiKey;
+    const res = await fetch(url.toString(), { headers, credentials: 'same-origin' });
+    if (!res.ok) {
+      if (res.status === 401) emitUnauthorized();
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(body?.message || body?.error || `Export failed (${res.status})`, res.status);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = /filename="([^"]+)"/.exec(disposition);
+    const filename = match?.[1] || 'properties_export.csv';
+    const rowCount = Number(res.headers.get('X-Export-Row-Count') || 0);
+    const includePii = res.headers.get('X-Export-Include-Pii') === '1';
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+    return { filename, rowCount, includePii };
+  },
 };
 
 export const currency = (v: number) =>

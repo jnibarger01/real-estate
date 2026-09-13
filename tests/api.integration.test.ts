@@ -166,3 +166,33 @@ describe('distributions', () => {
     assert.ok(body.items[0].property_count > 0);
   });
 });
+
+describe('properties export.csv', () => {
+  it('returns non-PII CSV for current filters and caps rows', async () => {
+    const res = await fetch(`${base}/api/properties/export.csv?city=KANSAS%20CITY&limit=5`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type') || '', /text\/csv/);
+    assert.equal(res.headers.get('x-export-include-pii'), '0');
+    const body = await res.text();
+    assert.match(body, /parcel_id/);
+    assert.doesNotMatch(body, /owner_info/);
+    const dataLines = body.trim().split('\n').slice(1);
+    assert.ok(dataLines.length <= 5);
+  });
+
+  it('includes PII only with confirm_pii when dashboard_app role is available', async () => {
+    const denied = await fetch(`${base}/api/properties/export.csv?include_pii=true&limit=2`);
+    assert.equal(denied.status, 400);
+    const deniedBody = await denied.json();
+    assert.equal(deniedBody.error, 'pii_confirm_required');
+
+    const res = await fetch(`${base}/api/properties/export.csv?include_pii=true&confirm_pii=true&limit=2`);
+    // CI fixture grants dashboard_app to the applying role; local without the role may 403.
+    assert.ok([200, 403].includes(res.status));
+    if (res.status === 200) {
+      assert.equal(res.headers.get('x-export-include-pii'), '1');
+      const body = await res.text();
+      assert.match(body, /owner_info/);
+    }
+  });
+});

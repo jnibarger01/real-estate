@@ -99,7 +99,9 @@ Authenticated deploy: `bun run build && bun run start` on one origin. The SPA sh
 | `GET/POST /api/auth/session|login|logout|touch` | public | SPA session cookie lifecycle (`SESSION_TTL_MS`) |
 | `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
 | `GET/POST/DELETE /api/dashboard/saved-searches` | required in production | Authenticated filter bookmarks (no owner PII columns) |
-| `GET /api/properties/*` | required in production | search/detail including owner PII |
+| `GET /api/properties/search` | required in production | search including owner PII |
+| `GET /api/properties/export.csv` | required in production | CSV of current search filters; default **non-PII**; hard cap **10_000** rows |
+| `GET /api/properties/:id` | required in production | detail including owner PII |
 | `GET /api/map/*` | required in production | viewport GeoJSON (`bbox`/`zoom`; hard cap **5000** features) |
 | `POST /mcp`, `POST /api/mcp` | same protect as `/api` | JSON-RPC; `tools/call` is not mocked |
 | `GET /api/provider/*` | required except `/provider/status` | optional RentCast |
@@ -129,6 +131,22 @@ Zoom-tier defaults when `limit` is omitted:
 Responses include `total`, `limit`, `truncated`, `geometry` (`centroid` \| `simplified` \| `polygon`), and `zoom`. Panning a dense zip stays interactive because each request is bbox-filtered and capped.
 
 See `mapLimitForZoom` / `mapGeometryMode` in `src/api/schemas.ts`.
+
+
+## CSV export
+
+`GET /api/properties/export.csv` downloads the **current search filters** as CSV (same WHERE clause as `/api/properties/search`).
+
+| Parameter | Notes |
+|---|---|
+| same as search | `q`, `city`, `owner`, `parcel`, `landuse`, value/beds/sqft bounds, `sort`, `order` |
+| `limit` | optional; hard cap **`CSV_EXPORT_MAX_ROWS = 10000`** (default 10000) |
+| `include_pii` | optional; when true, also requires `confirm_pii=true` |
+| `confirm_pii` | explicit second confirm for owner columns |
+
+Default columns omit `owner_info` and `owner_mailing_address`. Including PII also requires the DB session to hold role **`dashboard_app`** (`pg_has_role` / `current_user`). Large responses stream line-by-line above 500 rows. Responses set `X-Export-Row-Count`, `X-Export-Row-Cap`, and `X-Export-Include-Pii`.
+
+See `resolveExportColumns` / `CSV_EXPORT_MAX_ROWS` in `src/api/csvExport.ts`.
 
 ## Render
 

@@ -8,6 +8,7 @@ import { queryMany, queryOne } from '../db/pool.js';
 import {
   createSavedSearchSchema,
   distributionsQuerySchema,
+  exportQuerySchema,
   likePattern,
   mapGeomSqlExpression,
   mapGeometryMode,
@@ -27,6 +28,17 @@ import {
   deleteSavedSearch,
   listSavedSearches,
 } from '../savedSearchesStore.js';
+import { buildPropertySearchWhere } from '../propertySearchFilters.js';
+import {
+  CSV_EXPORT_STREAM_THRESHOLD,
+  buildCsvDocument,
+  csvDataLine,
+  csvHeaderLine,
+  exportFilename,
+  resolveExportColumns,
+  sqlSelectList,
+  type CsvColumn,
+} from '../csvExport.js';
 
 const router = Router();
 
@@ -164,37 +176,29 @@ router.get('/dashboard/distributions', async (req, res, next) => {
   }
 });
 
+async function connectedAsDashboardApp(): Promise<boolean> {
+  try {
+    const row = await queryOne<{ ok: boolean }>(
+      `SELECT (
+         EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dashboard_app')
+         AND (
+           current_user = 'dashboard_app'
+           OR pg_has_role(current_user, 'dashboard_app', 'MEMBER')
+         )
+       ) AS ok`,
+    );
+    return Boolean(row?.ok);
+  } catch {
+    return false;
+  }
+}
+
 router.get('/properties/search', async (req, res, next) => {
   try {
     const parsed = searchQuerySchema.parse(req.query);
-    const where: string[] = ['1=1'];
-    const filterParams: unknown[] = [];
-    const push = (value: unknown) => {
-      filterParams.push(value);
-      return `$${filterParams.length}`;
-    };
-
-    if (parsed.q) {
-      const q = likePattern(parsed.q);
-      where.push(`(situs_address ILIKE ${push(q)} OR parcel_number ILIKE ${push(q)} OR parcel_id ILIKE ${push(q)} OR owner_info ILIKE ${push(q)})`);
-    }
-    if (parsed.owner) where.push(`owner_info ILIKE ${push(likePattern(parsed.owner))}`);
-    if (parsed.parcel) {
-      const p = likePattern(parsed.parcel);
-      where.push(`(parcel_id ILIKE ${push(p)} OR parcel_number ILIKE ${push(p)})`);
-    }
-    if (parsed.city) where.push(`situs_city ILIKE ${push(parsed.city)}`);
-    if (parsed.landuse) where.push(`landuse_code = ${push(parsed.landuse)}`);
-    if (parsed.minValue !== undefined) where.push(`market_value_total >= ${push(parsed.minValue)}`);
-    if (parsed.maxValue !== undefined) where.push(`market_value_total <= ${push(parsed.maxValue)}`);
-    if (parsed.minBeds !== undefined) where.push(`bedrooms >= ${push(parsed.minBeds)}`);
-    if (parsed.maxBeds !== undefined) where.push(`bedrooms <= ${push(parsed.maxBeds)}`);
-    if (parsed.minSqft !== undefined) where.push(`living_area >= ${push(parsed.minSqft)}`);
-    if (parsed.maxSqft !== undefined) where.push(`living_area <= ${push(parsed.maxSqft)}`);
-
+    const { whereSql, params: filterParams } = buildPropertySearchWhere(parsed);
     const sortColumn = parsed.sort;
     const sortDir = parsed.order === 'asc' ? 'ASC' : 'DESC';
-    const whereSql = where.join(' AND ');
     const results = await queryMany<Record<string, unknown>>(
       `SELECT * FROM api.dashboard_property_search
        WHERE ${whereSql}
@@ -214,6 +218,70 @@ router.get('/properties/search', async (req, res, next) => {
       sort: parsed.sort,
       order: parsed.order,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Session-gated CSV of the current search filters.
+ * Default columns omit owner PII. include_pii + confirm_pii + dashboard_app role required for PII.
+ * Hard cap: CSV_EXPORT_MAX_ROWS (10_000). Streams when result set is large.
+ */
+router.get('/properties/export.csv', async (req, res, next) => {
+  try {
+    const username = resolveDashboardUsername(req);
+    if (!username) return res.status(401).json({ error: 'unauthorized' });
+
+    const parsed = exportQuerySchema.parse(req.query);
+    // Fail closed on missing confirm before any PII role/DB work.
+    if (parsed.include_pii && !parsed.confirm_pii) {
+      return res.status(400).json({
+        error: 'pii_confirm_required',
+        message: 'Owner PII columns require confirm_pii=true in addition to include_pii=true',
+      });
+    }
+    const hasRole = parsed.include_pii ? await connectedAsDashboardApp() : true;
+    const decision = resolveExportColumns({
+      includePii: parsed.include_pii,
+      confirmPii: parsed.confirm_pii,
+      hasDashboardAppRole: hasRole,
+    });
+    if (decision.ok === false) {
+      return res.status(decision.status).json({ error: decision.error, message: decision.message });
+    }
+
+    const columns = decision.columns;
+    const { whereSql, params: filterParams } = buildPropertySearchWhere(parsed);
+    const sortColumn = parsed.sort;
+    const sortDir = parsed.order === 'asc' ? 'ASC' : 'DESC';
+    const selectList = sqlSelectList(columns);
+    const rows = await queryMany<Record<string, unknown>>(
+      `SELECT ${selectList} FROM api.dashboard_property_search
+       WHERE ${whereSql}
+       ORDER BY ${sortColumn} ${sortDir} NULLS LAST
+       LIMIT $${filterParams.length + 1}`,
+      [...filterParams, parsed.limit],
+    );
+
+    const filename = exportFilename(decision.includePii);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Export-Row-Count', String(rows.length));
+    res.setHeader('X-Export-Row-Cap', String(parsed.limit));
+    res.setHeader('X-Export-Include-Pii', decision.includePii ? '1' : '0');
+    res.setHeader('Cache-Control', 'no-store');
+
+    if (rows.length >= CSV_EXPORT_STREAM_THRESHOLD) {
+      res.write(csvHeaderLine(columns) + '\n');
+      for (const row of rows) {
+        res.write(csvDataLine(row, columns) + '\n');
+      }
+      res.end();
+      return;
+    }
+
+    res.send(buildCsvDocument(rows, columns));
   } catch (err) {
     next(err);
   }

@@ -119,3 +119,15 @@ describe('saved search PII boundary', () => {
     ).toThrow();
   });
 });
+
+describe('csv export PII boundary', () => {
+  it('export schema defaults omit PII flags and caps rows at 10000', async () => {
+    const { exportQuerySchema } = await import('../src/api/schemas.ts');
+    const { CSV_EXPORT_MAX_ROWS } = await import('../src/api/csvExport.ts');
+    expect(CSV_EXPORT_MAX_ROWS).toBe(10_000);
+    const parsed = exportQuerySchema.parse({ city: 'RAYTOWN' });
+    expect(parsed.include_pii).toBe(false);
+    expect(parsed.confirm_pii).toBe(false);
+    expect(parsed.limit).toBe(CSV_EXPORT_MAX_ROWS);
+  });
+});
