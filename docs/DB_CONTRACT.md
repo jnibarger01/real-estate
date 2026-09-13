@@ -93,7 +93,7 @@ Grants: `PUBLIC` is revoked on schema `api`. Role `dashboard_app` can SELECT all
 | `api.dashboard_property_detail` | `GET /api/properties/:id` |
 | `api.dashboard_value_trends` | `GET /api/market/trends` |
 | `api.dashboard_transfers` | `GET /api/sales` |
-| `api.dashboard_map_properties` | `GET /api/map/properties` |
+| `api.dashboard_map_properties` | `GET /api/map/properties` (bbox ≤1°/axis; hard cap 5000 features; zoom selects centroid / simplified / full geom) |
 | `api.dashboard_property_types` | `GET /api/dashboard/distributions?dimension=property_type` |
 | `api.dashboard_value_bands` | `GET /api/dashboard/distributions?dimension=value_band` |
 | `api.dashboard_assessment_classes` | `GET /api/dashboard/distributions?dimension=assessment_class` |

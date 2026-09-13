@@ -99,11 +99,35 @@ Authenticated deploy: `bun run build && bun run start` on one origin. The SPA sh
 | `GET/POST /api/auth/session|login|logout|touch` | public | SPA session cookie lifecycle (`SESSION_TTL_MS`) |
 | `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
 | `GET /api/properties/*` | required in production | search/detail including owner PII |
-| `GET /api/map/*` | required in production | bbox GeoJSON |
+| `GET /api/map/*` | required in production | viewport GeoJSON (`bbox`/`zoom`; hard cap **5000** features) |
 | `POST /mcp`, `POST /api/mcp` | same protect as `/api` | JSON-RPC; `tools/call` is not mocked |
 | `GET /api/provider/*` | required except `/provider/status` | optional RentCast |
 
 Failures stay failures. MCP `tools/call` returns a JSON-RPC error. The explorer client (`ZillowMcpClient`) never converts abort/network/provider errors into `success: true`. Fixtures run only when `VITE_ALLOW_FIXTURE_ADAPTER=true` in a Vite dev build.
+
+## Map viewport loading
+
+`GET /api/map/properties` loads parcels for the current MapLibre viewport only. PostGIS (`api.dashboard_map_properties`) is the source of truth.
+
+| Parameter | Notes |
+|---|---|
+| `bbox` | `minLng,minLat,maxLng,maxLat`; max **1°** span per axis |
+| `zoom` | optional; drives feature cap and geometry simplification |
+| `limit` | optional override; hard cap **`MAP_MAX_FEATURES = 5000`** |
+
+Zoom-tier defaults when `limit` is omitted:
+
+| Zoom | Max features | Geometry |
+|---|---|---|
+| `< 11` | 400 | centroid points (MapLibre-clustered in the SPA) |
+| `< 13` | 1,500 | centroid points (MapLibre-clustered) |
+| `< 15` | 4,000 | `ST_SimplifyPreserveTopology` polygons |
+| `≥ 15` | 5,000 | full parcel polygons |
+| (no zoom) | 2,000 | centroid |
+
+Responses include `total`, `limit`, `truncated`, `geometry` (`centroid` \| `simplified` \| `polygon`), and `zoom`. Panning a dense zip stays interactive because each request is bbox-filtered and capped.
+
+See `mapLimitForZoom` / `mapGeometryMode` in `src/api/schemas.ts`.
 
 ## Render
 
