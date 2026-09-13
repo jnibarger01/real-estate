@@ -9,3 +9,5 @@ coverage/
 test-results/
 playwright-report/
 blob-report/
+backups/
+*.dump

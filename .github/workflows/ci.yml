@@ -56,6 +56,11 @@ jobs:
           PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -c "SELECT property_count FROM api.dashboard_summary;"
           PGPASSWORD=postgres psql -h localhost -U postgres -d realestate_test -tAc "SELECT COUNT(*) FROM information_schema.role_table_grants WHERE grantee = 'PUBLIC' AND table_schema = 'api' AND privilege_type = 'SELECT' AND table_name IN ('dashboard_property_search','dashboard_property_detail')" | grep -qx 0
 
+      - name: Postgres backup/restore drill
+        env:
+          THROW_DB: realestate_restore_drill
+        run: scripts/restore-drill.sh
+
       - name: Unit tests
         run: bun run test:unit
 

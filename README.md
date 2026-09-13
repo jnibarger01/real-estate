@@ -73,6 +73,10 @@ DashboardApp shows an ingest freshness badge (timestamp + Fresh/Stale) from that
 
 See `docs/DB_CONTRACT.md` and `docs/ARCHITECTURE.md`.
 
+### Backup / restore drill
+
+Logical backups: `bun run db:backup` (`scripts/backup-postgres.sh`). Practice restore onto a throwaway database and verify `dashboard_readonly` can query `api.dashboard_*` (not owner-PII views). Runbook: [`docs/POSTGRES_BACKUP_RESTORE.md`](docs/POSTGRES_BACKUP_RESTORE.md). Helper: `bun run db:restore-drill` / `scripts/restore-drill.sh`. Dump files stay under `./backups/` (gitignored); never commit them.
+
 ## Environment
 
 Production (`NODE_ENV=production`) **will not start** unless dashboard auth is configured:
