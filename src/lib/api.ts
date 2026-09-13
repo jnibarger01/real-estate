@@ -139,6 +139,30 @@ export interface MapSummaryDatum {
   property_count: number;
 }
 
+
+export type SavedSearchQueryParams = {
+  q?: string;
+  city?: string;
+  parcel?: string;
+  landuse?: string;
+  minValue?: number;
+  maxValue?: number;
+  minBeds?: number;
+  maxBeds?: number;
+  minSqft?: number;
+  maxSqft?: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
+};
+
+export type SavedSearch = {
+  id: string;
+  username: string;
+  label: string;
+  query_params: SavedSearchQueryParams;
+  created_at: string;
+};
+
 export type AuthSessionResponse = {
   authenticated: boolean;
   authRequired: boolean;
@@ -200,6 +224,24 @@ async function authRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+
+async function mutateRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const url = new URL(runtimeConfig.apiUrl(path), window.location.origin);
+  const headers: HeadersInit = {
+    ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(init?.headers || {}),
+  };
+  if (runtimeConfig.apiKey) (headers as Record<string, string>)['x-api-key'] = runtimeConfig.apiKey;
+  const res = await fetch(url.toString(), { ...init, headers, credentials: 'same-origin' });
+  if (!res.ok) {
+    if (res.status === 401) emitUnauthorized();
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(body?.message || body?.error || `Request failed (${res.status})`, res.status);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 export const authApi = {
   session: () => authRequest<AuthSessionResponse>('/api/auth/session'),
   login: (username: string, password: string) =>
@@ -232,6 +274,14 @@ export const api = {
     request<MapFeatureCollection>('/api/map/properties', { bbox: bbox.join(','), limit, zoom }),
   mapSummary: (bbox: [number, number, number, number]) =>
     request<MapSummaryDatum[]>('/api/map/summary', { bbox: bbox.join(',') }),
+  listSavedSearches: () => request<{ items: SavedSearch[] }>('/api/dashboard/saved-searches'),
+  createSavedSearch: (body: { label: string; query_params: SavedSearchQueryParams }) =>
+    mutateRequest<SavedSearch>('/api/dashboard/saved-searches', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteSavedSearch: (id: string) =>
+    mutateRequest<void>(`/api/dashboard/saved-searches/${id}`, { method: 'DELETE' }),
 };
 
 export const currency = (v: number) =>

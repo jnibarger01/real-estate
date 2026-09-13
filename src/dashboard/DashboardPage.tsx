@@ -16,6 +16,7 @@ import PropertyTypesChart from './PropertyTypesChart';
 import PropertyExplorer from './PropertyExplorer';
 import PropertyMap from './PropertyMap';
 import DashboardFilters, { type DashboardFiltersState } from './DashboardFilters';
+import SavedSearches from './SavedSearches';
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
@@ -68,6 +69,7 @@ export default function DashboardPage() {
             )}
           </div>
           <DashboardFilters value={filters} onChange={setFilters} className="mt-4" />
+          <SavedSearches filters={filters} onApply={setFilters} />
         </div>
       </header>
 

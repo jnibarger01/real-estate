@@ -137,3 +137,29 @@ export function mcpEnabled(): boolean {
   if (raw === 'true' || raw === '1' || raw === 'on') return true;
   return process.env.NODE_ENV !== 'production';
 }
+
+/** Resolve the dashboard operator identity for per-user resources (saved searches). */
+export function resolveDashboardUsername(req: { get(name: string): string | undefined; headers: { cookie?: string } }): string | null {
+  const session = readSessionFromRequest(req as never);
+  if (session?.u) return session.u;
+
+  const authorization = req.get('authorization');
+  if (authorization?.startsWith('Basic ')) {
+    const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
+    const separator = decoded.indexOf(':');
+    if (separator >= 0) {
+      const username = decoded.slice(0, separator);
+      const password = decoded.slice(separator + 1);
+      if (matchesBasicUser(username, password)) return username;
+    }
+  }
+
+  const apiKey = process.env.API_KEY?.trim();
+  if (apiKey) {
+    const provided = req.get('x-api-key') || '';
+    if (provided && constantTimeEqual(provided, apiKey)) return 'api-key';
+  }
+
+  if (!dashboardAuthConfigured()) return 'local';
+  return null;
+}

@@ -186,3 +186,29 @@ export function clampMapBbox(
 export function likePattern(value: string): string {
   return `%${value.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
 }
+
+export const savedSearchQueryParamsSchema = z
+  .object({
+    q: z.string().trim().max(200).optional(),
+    city: z.string().trim().max(100).optional(),
+    parcel: z.string().trim().max(64).optional(),
+    landuse: z.string().trim().max(20).optional(),
+    minValue: z.coerce.number().int().nonnegative().optional(),
+    maxValue: z.coerce.number().int().nonnegative().optional(),
+    minBeds: z.coerce.number().int().nonnegative().optional(),
+    maxBeds: z.coerce.number().int().nonnegative().optional(),
+    minSqft: z.coerce.number().int().nonnegative().optional(),
+    maxSqft: z.coerce.number().int().nonnegative().optional(),
+    sort: z.enum(SORT_FIELDS).optional(),
+    order: z.enum(['asc', 'desc']).optional(),
+  })
+  .strict();
+
+export const createSavedSearchSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  query_params: savedSearchQueryParamsSchema.default({}),
+});
+
+export const savedSearchIdParamSchema = z.object({
+  id: z.string().uuid(),
+});

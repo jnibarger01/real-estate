@@ -81,3 +81,6 @@ Render (`render.yaml`) still deploys `backend.ts` for API-only hosting. Point a 
 
 `GET /api/map/properties` requires a bbox (≤1° per axis) and optionally `zoom` / `limit`. Hard cap: **5000** features (`MAP_MAX_FEATURES`). Low zoom returns centroids; mid zoom simplifies polygons in PostGIS; high zoom returns full geometries. The dashboard MapLibre client viewport-loads on pan/zoom and clusters centroid points client-side. Source of truth remains `api.dashboard_map_properties`.
 
+## Saved searches
+
+Operators bookmark dashboard filter query params (`label` + sanitized `query_params`) in `api.saved_searches` via authenticated `/api/dashboard/saved-searches`. Explicit `owner` keys are rejected/stripped. The GitHub Pages shell must not persist owner names or saved-search rows in static assets or `localStorage`; `SavedSearches` is disabled when `runtimeConfig.isPagesBuild` is true.

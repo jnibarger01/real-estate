@@ -39,7 +39,7 @@ Requirements: Bun, Node.js, and PostgreSQL 16 with PostGIS (`jacen_dev`).
 bun install --frozen-lockfile
 cp .env.example .env
 # set DATABASE_URL if you are not using the local peer-auth default
-bun run db:views          # apply sql/api_dashboard_views.sql
+bun run db:views          # apply sql/api_dashboard_views.sql + sql/api_saved_searches.sql
 bun run lint
 bun run test
 bun run dev               # Express + Vite + dashboard API on :3000
@@ -98,6 +98,7 @@ Authenticated deploy: `bun run build && bun run start` on one origin. The SPA sh
 | `GET /api/health`, `/health`, `/healthz` | public | process + Postgres + PostGIS + `api.dashboard_*` readiness |
 | `GET/POST /api/auth/session|login|logout|touch` | public | SPA session cookie lifecycle (`SESSION_TTL_MS`) |
 | `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
+| `GET/POST/DELETE /api/dashboard/saved-searches` | required in production | Authenticated filter bookmarks (no owner PII columns) |
 | `GET /api/properties/*` | required in production | search/detail including owner PII |
 | `GET /api/map/*` | required in production | viewport GeoJSON (`bbox`/`zoom`; hard cap **5000** features) |
 | `POST /mcp`, `POST /api/mcp` | same protect as `/api` | JSON-RPC; `tools/call` is not mocked |
