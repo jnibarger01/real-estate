@@ -1,7 +1,8 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { randomUUID } from 'node:crypto';
+import { resolveDashboardUsername } from '../api/auth.js';
 
 declare global { namespace Express { interface Request { requestId?: string } } }
 
@@ -45,24 +46,49 @@ export const securityHeaders = helmet({
   hsts: process.env.NODE_ENV === 'production' ? { maxAge: 15552000, includeSubDomains: true } : false,
 });
 
-export function piiRateLimit(): RequestHandler {
-  return rateLimit({
-    windowMs: 60_000,
-    limit: Math.max(1, Number(process.env.PII_RATE_LIMIT_PER_MINUTE || 30)),
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    handler: (req, res) =>
-      res.status(429).json({ success: false, error: 'Too many requests. Please retry shortly.', requestId: req.requestId }),
+/** Per-principal bucket: session user, validated Basic user, API key, else IP. */
+export function rateLimitKeyForRequest(req: Request): string {
+  const principal = resolveDashboardUsername(req);
+  if (principal) return `principal:${principal}`;
+  const ip = typeof req.ip === 'string' && req.ip ? req.ip : req.socket?.remoteAddress || 'unknown';
+  return `ip:${ipKeyGenerator(ip)}`;
+}
+
+function rateLimitExceededHandler(req: Request, res: import('express').Response): void {
+  res.status(429).json({
+    success: false,
+    error: 'rate_limit_exceeded',
+    message: 'Too many requests. Please retry shortly.',
+    requestId: req.requestId,
   });
 }
 
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : fallback;
+}
+
+/** Tighter limit for owner-PII / search-heavy property + map routes. */
+export function piiRateLimit(): RequestHandler {
+  return rateLimit({
+    windowMs: 60_000,
+    limit: parsePositiveInt(process.env.PII_RATE_LIMIT_PER_MINUTE, 30),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: rateLimitKeyForRequest,
+    handler: rateLimitExceededHandler,
+  });
+}
+
+/** General API limit (covers /api/dashboard/* and the rest of /api). */
 export function apiRateLimit(): RequestHandler {
   return rateLimit({
     windowMs: 60_000,
-    limit: Math.max(1, Number(process.env.API_RATE_LIMIT_PER_MINUTE || 60)),
+    limit: parsePositiveInt(process.env.API_RATE_LIMIT_PER_MINUTE, 60),
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    handler: (req, res) => res.status(429).json({ success: false, error: 'Too many requests. Please retry shortly.', requestId: req.requestId }),
+    keyGenerator: rateLimitKeyForRequest,
+    handler: rateLimitExceededHandler,
   });
 }
 
