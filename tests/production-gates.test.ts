@@ -35,8 +35,10 @@ describe('ingest freshness helper', () => {
   });
 
   it('fails when the stamp is older than the SLA', () => {
-    const old = new Date(Date.now() - 48 * 3600_000).toISOString();
-    expect(evaluateIngestFreshness(old, 24).ok).toBe(false);
+    const now = new Date('2026-09-13T12:00:00.000Z');
+    const old = new Date(now.getTime() - 48 * 3600_000).toISOString();
+    expect(evaluateIngestFreshness(old, 24, now).ok).toBe(false);
+    expect(evaluateIngestFreshness(old, 72, now).ok).toBe(true);
   });
 });
 
