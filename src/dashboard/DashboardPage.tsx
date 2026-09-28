@@ -68,6 +68,7 @@ class LazyPanelErrorBoundary extends React.Component<
   { children: ReactNode; label: string; className?: string },
   { failed: boolean }
 > {
+  declare readonly props: { children: ReactNode; label: string; className?: string };
   state = { failed: false };
 
   static getDerivedStateFromError() {
