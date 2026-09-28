@@ -27,3 +27,13 @@ describe('Helmet CSP', () => {
     expect(res.headers['content-security-policy']).toBeUndefined();
   });
 });
+
+describe('browser entry under CSP', () => {
+  it('main.tsx configures zod jitless before any other import (no eval probe)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const main = readFileSync('src/main.tsx', 'utf8');
+    const firstImport = main.split('\n').find((line) => line.startsWith('import '));
+    expect(firstImport).toBe("import './lib/zodCsp';");
+    expect(readFileSync('src/lib/zodCsp.ts', 'utf8')).toMatch(/z\.config\(\{\s*jitless:\s*true\s*\}\)/);
+  });
+});
