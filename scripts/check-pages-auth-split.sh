@@ -115,6 +115,13 @@ scan_dist() {
     fi
   done
 
+  # Pages shell must stay out of search indexes (issue #34).
+  [[ -f dist/robots.txt ]] || fail "Pages dist is missing robots.txt"
+  grep -qx 'Disallow: /' dist/robots.txt || fail "Pages robots.txt lacks a sitewide 'Disallow: /'"
+  grep -qE '<meta name="robots" content="noindex, nofollow"' dist/index.html \
+    || fail "Pages index.html lacks robots noindex meta"
+  [[ ! -e dist/sitemap.xml ]] || fail "Pages dist must not ship sitemap.xml"
+
   echo "pages-auth-split dist scan: ok"
 }
 
