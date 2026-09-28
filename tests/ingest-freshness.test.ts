@@ -1,7 +1,7 @@
 /**
  * Ingest freshness badge — pure helpers + SLA env; no PostGIS required.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { evaluateIngestFreshness, ingestMaxAgeHours } from '../src/api/db/pool.ts';
 import { summaryResponseSchema } from '../src/api/schemas.ts';
 import {
@@ -22,6 +22,17 @@ function restoreEnv() {
 
 afterEach(restoreEnv);
 
+// evaluateIngestFreshness measures age against the wall clock (Date.now()).
+// Pin "now" to one hour after the fixture stamp so the fixture-based SLA
+// assertions stay deterministic instead of going stale 168h after the stamp.
+const FIXTURE_STAMP = '2026-09-13T12:00:00.000Z';
+const FIXTURE_NOW = new Date('2026-09-13T13:00:00.000Z');
+
+function pinClockToFixture() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(FIXTURE_NOW);
+}
+
 describe('ingestMaxAgeHours', () => {
   it('prefers INGEST_SLA_HOURS over INGEST_MAX_AGE_HOURS', () => {
     process.env.INGEST_SLA_HOURS = '24';
@@ -39,9 +50,15 @@ describe('ingestMaxAgeHours', () => {
 });
 
 describe('evaluateIngestFreshness with fixture stamp', () => {
+  beforeEach(pinClockToFixture);
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('marks a recent fixture stamp as fresh within SLA', () => {
-    const stamped = '2026-09-13T12:00:00.000Z';
+    const stamped = FIXTURE_STAMP;
     const freshness = evaluateIngestFreshness(stamped, 168);
+    expect(freshness.ageHours).toBe(1);
     expect(freshness.ok).toBe(true);
     expect(freshness.refreshedAt).toBe(stamped);
     expect(freshness.source).toBe('mart.residential_properties');
@@ -88,8 +105,13 @@ describe('badge helpers', () => {
 });
 
 describe('summaryResponseSchema ingest_freshness', () => {
+  beforeEach(pinClockToFixture);
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('accepts a fixture ingest_freshness payload', () => {
-    const stamped = '2026-09-13T12:00:00.000Z';
+    const stamped = FIXTURE_STAMP;
     const parsed = summaryResponseSchema.parse({
       property_count: 3,
       total_properties: 3,
