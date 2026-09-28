@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { injectRobotsMeta, pagesNoIndex, PAGES_ROBOTS_META, PAGES_ROBOTS_TXT } from '../src/build/pagesNoIndex.ts';
+import { injectRobotsMeta, pagesNoIndex, PAGES_ROBOTS_META, PAGES_ROBOTS_TXT } from '../src/vitePlugins/pagesNoIndex.ts';
 
 const HTML = '<!doctype html>\n<html lang="en">\n  <head>\n    <title>x</title>\n  </head>\n</html>';
 
