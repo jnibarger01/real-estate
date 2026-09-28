@@ -76,3 +76,24 @@ test('table select opens owner detail and close dismisses it', async ({ page }) 
   await detail.getByRole('button', { name: 'Close' }).click();
   await expect(detail).toHaveCount(0);
 });
+
+test('production CSP header is present and the dashboard loads without CSP violations', async ({ page }) => {
+  const violations: string[] = [];
+  page.on('console', (msg) => {
+    if (/Content Security Policy/i.test(msg.text())) violations.push(msg.text());
+  });
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (e) => {
+      console.error(`Content Security Policy violation: ${e.violatedDirective} ${e.blockedURI}`);
+    });
+  });
+
+  const response = await page.goto('/');
+  expect(response?.headers()['content-security-policy'] || '').toMatch(/default-src 'self'/);
+
+  await loginViaForm(page);
+  await expect(page.getByTestId('property-row').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/residential parcels across Jackson County/i)).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(1_500); // let map workers/style requests settle
+  expect(violations, violations.join('\n')).toEqual([]);
+});
