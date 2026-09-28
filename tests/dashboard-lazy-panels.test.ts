@@ -24,15 +24,30 @@ describe('DashboardPage lazy panel loading (#38)', () => {
     expect(src).not.toMatch(staticImport);
   });
 
-  it.each(HEAVY_MODULES)('starts the %s dynamic import during dashboard module evaluation', (mod) => {
-    expect(src).toMatch(new RegExp(`const\\s+\\w+Module\\s*=\\s*import\\(['"]\\.\\/${mod}['"]\\)`));
+  it.each(HEAVY_MODULES)('keeps the %s import behind a cached loader', (mod) => {
+    expect(src).toMatch(new RegExp(`\\?\\?=\\s*import\\(['"]\\.\\/${mod}['"]\\)`));
   });
 
-  it('hands the preloaded modules to React.lazy instead of delaying import until query completion', () => {
-    expect(src).toContain('const ChangeChart = lazy(() => changeChartModule);');
-    expect(src).toContain('const ValueDistributionChart = lazy(() => valueDistributionChartModule);');
-    expect(src).toContain('const PropertyTypesChart = lazy(() => propertyTypesChartModule);');
-    expect(src).toContain('const PropertyMap = lazy(() => propertyMapModule);');
+  it('primes panel loaders from the authenticated DashboardPage render before queries start', () => {
+    const pageStart = src.indexOf('export default function DashboardPage()');
+    const preloadCall = src.indexOf('preloadDashboardPanels();', pageStart);
+    const firstQuery = src.indexOf('useQuery(', pageStart);
+    expect(pageStart).toBeGreaterThanOrEqual(0);
+    expect(preloadCall).toBeGreaterThan(pageStart);
+    expect(firstQuery).toBeGreaterThan(preloadCall);
+  });
+
+  it('does not start heavy imports at module evaluation time', () => {
+    const pageStart = src.indexOf('export default function DashboardPage()');
+    const beforePage = src.slice(0, pageStart);
+    expect(beforePage).not.toMatch(/=\\s*import\\(['"]\\.\\/(?:PropertyMap|ChangeChart|ValueDistributionChart|PropertyTypesChart)['"]\\);/);
+  });
+
+  it('hands stable cached loaders to React.lazy', () => {
+    expect(src).toContain('const ChangeChart = lazy(loadChangeChart);');
+    expect(src).toContain('const ValueDistributionChart = lazy(loadValueDistributionChart);');
+    expect(src).toContain('const PropertyTypesChart = lazy(loadPropertyTypesChart);');
+    expect(src).toContain('const PropertyMap = lazy(loadPropertyMap);');
   });
 
   it.each(EAGER_MODULES)('keeps %s eager', (mod) => {
@@ -45,7 +60,7 @@ describe('DashboardPage lazy panel loading (#38)', () => {
   });
 
   it('contains lazy import failures and exposes a reload retry without losing the dashboard shell', () => {
-    expect(src).toContain('class LazyPanelErrorBoundary extends Component');
+    expect(src).toContain('class LazyPanelErrorBoundary extends React.Component');
     expect(src).toContain('static getDerivedStateFromError()');
     expect(src).toContain('role="alert"');
     expect(src).toContain('window.location.reload()');
