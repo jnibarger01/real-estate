@@ -21,15 +21,39 @@ export type SessionPayload = {
 /** In-memory denylist of revoked session tokens until their natural expiry. */
 const revokedSessions = new Map<string, number>();
 
+const DEFAULT_REVOKE_MAX = 10_000;
+
+/** Per-process ceiling for the revoke denylist (env SESSION_REVOKE_MAX_ENTRIES). */
+export function getSessionRevokeMaxEntries(): number {
+  const raw = Number(process.env.SESSION_REVOKE_MAX_ENTRIES);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_REVOKE_MAX;
+  return Math.floor(raw);
+}
+
 function pruneRevoked(now = Date.now()): void {
   for (const [token, exp] of revokedSessions) {
     if (exp <= now) revokedSessions.delete(token);
   }
 }
 
+/** Evict soonest-expiring entries until size <= max (insertion order is not age). */
+function evictToCap(max: number): void {
+  if (revokedSessions.size <= max) return;
+  const ranked = [...revokedSessions.entries()].sort((a, b) => a[1] - b[1]);
+  const overflow = revokedSessions.size - max;
+  for (let i = 0; i < overflow; i++) revokedSessions.delete(ranked[i][0]);
+}
+
 export function revokeSessionToken(token: string, exp: number, now = Date.now()): void {
   pruneRevoked(now);
-  if (exp > now) revokedSessions.set(token, exp);
+  if (exp <= now) return;
+  revokedSessions.set(token, exp);
+  evictToCap(getSessionRevokeMaxEntries());
+}
+
+/** Test helper */
+export function revokedSessionCountForTests(): number {
+  return revokedSessions.size;
 }
 
 export function isSessionTokenRevoked(token: string, now = Date.now()): boolean {
