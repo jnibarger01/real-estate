@@ -8,6 +8,7 @@ import DashboardPage from './dashboard/DashboardPage';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import LoginPage from './auth/LoginPage';
 import IdleWarning from './auth/IdleWarning';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,7 +21,7 @@ const queryClient = new QueryClient({
 });
 
 function DashboardShell() {
-  const { status } = useAuth();
+  const { status, logout } = useAuth();
 
   if (status === 'loading') {
     return (
@@ -34,11 +35,13 @@ function DashboardShell() {
     return <LoginPage />;
   }
 
+  // Only the authenticated shell is wrapped; LoginPage keeps its own inline
+  // auth error handling.
   return (
-    <>
+    <ErrorBoundary onSignOut={logout}>
       <DashboardPage />
       <IdleWarning />
-    </>
+    </ErrorBoundary>
   );
 }
 
