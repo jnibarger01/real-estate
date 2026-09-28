@@ -21,8 +21,10 @@ import IngestFreshnessBadge from './IngestFreshnessBadge';
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
+import { useDocumentTitle } from '../lib/documentTitle';
 
 export default function DashboardPage() {
+  useDocumentTitle('Dashboard');
   const { logout, session } = useAuth();
   const [filters, setFilters] = useState<DashboardFiltersState>({});
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
