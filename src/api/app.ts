@@ -6,7 +6,7 @@
 import express, { type RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { GoogleGenAI, Type } from '@google/genai';
-import { inspectDatabase } from './db/pool.js';
+import { inspectDatabase, pingDatabase } from './db/pool.js';
 import dashboardRouter from './routes/dashboard.js';
 import authRouter from './routes/auth.js';
 import { createProviderRouter } from './routes/provider.js';
@@ -30,7 +30,24 @@ export function createApp(options: { enforceAuth?: boolean } = {}): express.Expr
 
   const protect = createProtectMiddleware(options);
 
-  const healthHandler: RequestHandler = async (_req, res) => {
+  // Liveness: process is up and Postgres answers a round-trip. Data readiness
+  // (PostGIS, dashboard views, ingest SLA) is deliberately excluded so a stale
+  // ingest stamp never gets a healthy instance killed by a load balancer.
+  const livenessHandler: RequestHandler = async (_req, res) => {
+    const database = await pingDatabase();
+    res.status(database.ok ? 200 : 503).json({
+      status: database.ok ? 'ok' : 'error',
+      probe: 'liveness',
+      process: { ok: true, uptimeSec: Math.round(process.uptime()) },
+      database,
+      time: new Date().toISOString(),
+    });
+  };
+
+  // Readiness: full contract. 503 when the DB is down, and in production also
+  // when the ingest stamp is past its SLA; missing PostGIS/views report
+  // `degraded`.
+  const readinessHandler: RequestHandler = async (_req, res) => {
     const inspection = await inspectDatabase();
     const processOk = true;
     const ingestStale = !inspection.ingestFreshness.ok;
@@ -43,6 +60,7 @@ export function createApp(options: { enforceAuth?: boolean } = {}): express.Expr
     const http = failClosed || status === 'error' ? 503 : 200;
     res.status(http).json({
       status: failClosed ? 'error' : status,
+      probe: 'readiness',
       process: { ok: processOk, uptimeSec: Math.round(process.uptime()) },
       database: inspection.database,
       postgis: inspection.postgis,
@@ -52,9 +70,10 @@ export function createApp(options: { enforceAuth?: boolean } = {}): express.Expr
     });
   };
 
-  app.get('/api/health', healthHandler);
-  app.get('/healthz', healthHandler);
-  app.get('/health', healthHandler);
+  app.get('/healthz', livenessHandler);
+  app.get('/health', livenessHandler);
+  app.get('/readyz', readinessHandler);
+  app.get('/api/health', readinessHandler);
 
   app.use('/api', (req, res, next) => {
     if (isPublicApiPath(req.path)) return next();

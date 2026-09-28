@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Probe /api/health for cron or an uptime checker.
+# Readiness probe (/readyz: DB + PostGIS + dashboard views + ingest SLA) for
+# cron or an uptime checker. For process liveness only, probe /healthz instead.
 # Usage: scripts/check-health.sh [BASE_URL]
 set -euo pipefail
 BASE="${1:-${HEALTH_URL:-http://127.0.0.1:3000}}"
-BODY="$(curl -fsS "$BASE/api/health")"
+BODY="$(curl -fsS "$BASE/readyz")"
 echo "$BODY"
 python3 - <<'PY' <<<"$BODY"
 import json,sys

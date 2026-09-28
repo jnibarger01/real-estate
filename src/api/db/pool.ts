@@ -91,6 +91,20 @@ const REQUIRED_VIEWS = [
   'api.ingest_state',
 ];
 
+/**
+ * Liveness-grade DB probe: a single round-trip, no PostGIS / view / ingest
+ * checks. Used by /healthz so a data-SLA miss never marks the process dead.
+ */
+export async function pingDatabase(): Promise<DatabaseValidation['database']> {
+  const started = Date.now();
+  try {
+    await pool.query('SELECT 1');
+    return { ok: true, latencyMs: Date.now() - started };
+  } catch {
+    return { ok: false, latencyMs: Date.now() - started, error: 'unreachable' };
+  }
+}
+
 export async function inspectDatabase(): Promise<DatabaseValidation> {
   const started = Date.now();
   try {

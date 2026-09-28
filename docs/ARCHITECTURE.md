@@ -16,7 +16,7 @@ createApp()
    ├── /api/dashboard/*
    ├── /api/properties/*
    ├── /api/map/*
-   ├── /api/health
+   ├── /healthz (liveness) · /readyz, /api/health (readiness)
    ├── /mcp
    └── /api/provider/*   ← RentCast, if retained
         │
