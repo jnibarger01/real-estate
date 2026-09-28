@@ -50,9 +50,15 @@ export function ingestMaxAgeHours(): number {
   return Number.isFinite(raw) ? Math.max(0, raw) : 168;
 }
 
+/**
+ * Pure SLA check for the ingest stamp. `now` defaults to the wall clock so HTTP
+ * handlers keep their behavior; tests pass an explicit instant instead of
+ * faking timers.
+ */
 export function evaluateIngestFreshness(
   refreshedAt: Date | string | null | undefined,
   maxAgeHours = ingestMaxAgeHours(),
+  now: number | Date = Date.now(),
 ): IngestFreshness {
   if (maxAgeHours === 0) {
     return { ok: true, source: 'mart.residential_properties', refreshedAt: refreshedAt ? String(refreshedAt) : null, ageHours: null, maxAgeHours };
@@ -64,7 +70,8 @@ export function evaluateIngestFreshness(
   if (Number.isNaN(stamp.getTime())) {
     return { ok: false, source: 'mart.residential_properties', refreshedAt: String(refreshedAt), ageHours: null, maxAgeHours };
   }
-  const ageHours = (Date.now() - stamp.getTime()) / 3_600_000;
+  const nowMs = now instanceof Date ? now.getTime() : now;
+  const ageHours = (nowMs - stamp.getTime()) / 3_600_000;
   return {
     ok: ageHours <= maxAgeHours,
     source: 'mart.residential_properties',

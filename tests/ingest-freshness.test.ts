@@ -1,7 +1,7 @@
 /**
  * Ingest freshness badge — pure helpers + SLA env; no PostGIS required.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { evaluateIngestFreshness, ingestMaxAgeHours } from '../src/api/db/pool.ts';
 import { summaryResponseSchema } from '../src/api/schemas.ts';
 import {
@@ -22,16 +22,10 @@ function restoreEnv() {
 
 afterEach(restoreEnv);
 
-// evaluateIngestFreshness measures age against the wall clock (Date.now()).
-// Pin "now" to one hour after the fixture stamp so the fixture-based SLA
-// assertions stay deterministic instead of going stale 168h after the stamp.
+// Pass an explicit "now" one hour after the fixture stamp so the fixture-based
+// SLA assertions stay deterministic instead of going stale 168h after the stamp.
 const FIXTURE_STAMP = '2026-09-13T12:00:00.000Z';
 const FIXTURE_NOW = new Date('2026-09-13T13:00:00.000Z');
-
-function pinClockToFixture() {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(FIXTURE_NOW);
-}
 
 describe('ingestMaxAgeHours', () => {
   it('prefers INGEST_SLA_HOURS over INGEST_MAX_AGE_HOURS', () => {
@@ -50,14 +44,9 @@ describe('ingestMaxAgeHours', () => {
 });
 
 describe('evaluateIngestFreshness with fixture stamp', () => {
-  beforeEach(pinClockToFixture);
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('marks a recent fixture stamp as fresh within SLA', () => {
     const stamped = FIXTURE_STAMP;
-    const freshness = evaluateIngestFreshness(stamped, 168);
+    const freshness = evaluateIngestFreshness(stamped, 168, FIXTURE_NOW);
     expect(freshness.ageHours).toBe(1);
     expect(freshness.ok).toBe(true);
     expect(freshness.refreshedAt).toBe(stamped);
@@ -65,11 +54,25 @@ describe('evaluateIngestFreshness with fixture stamp', () => {
   });
 
   it('marks an old fixture stamp as stale past SLA', () => {
-    const stamped = new Date(Date.now() - 72 * 3600_000).toISOString();
-    const freshness = evaluateIngestFreshness(stamped, 24);
+    const stamped = new Date(FIXTURE_NOW.getTime() - 72 * 3600_000).toISOString();
+    const freshness = evaluateIngestFreshness(stamped, 24, FIXTURE_NOW);
     expect(freshness.ok).toBe(false);
     expect(freshness.refreshedAt).toBe(stamped);
     expect(ingestBadgeStatus(freshness)).toBe('stale');
+  });
+
+  it('accepts a numeric epoch-ms now and is deterministic', () => {
+    const first = evaluateIngestFreshness(FIXTURE_STAMP, 168, FIXTURE_NOW.getTime());
+    const second = evaluateIngestFreshness(FIXTURE_STAMP, 168, FIXTURE_NOW.getTime());
+    expect(first).toEqual(second);
+    expect(first.ageHours).toBe(1);
+  });
+
+  it('flips exactly at the SLA boundary for an explicit now', () => {
+    const atBoundary = new Date(Date.parse(FIXTURE_STAMP) + 168 * 3600_000);
+    const pastBoundary = new Date(atBoundary.getTime() + 1);
+    expect(evaluateIngestFreshness(FIXTURE_STAMP, 168, atBoundary).ok).toBe(true);
+    expect(evaluateIngestFreshness(FIXTURE_STAMP, 168, pastBoundary).ok).toBe(false);
   });
 });
 
@@ -105,11 +108,6 @@ describe('badge helpers', () => {
 });
 
 describe('summaryResponseSchema ingest_freshness', () => {
-  beforeEach(pinClockToFixture);
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('accepts a fixture ingest_freshness payload', () => {
     const stamped = FIXTURE_STAMP;
     const parsed = summaryResponseSchema.parse({
@@ -134,7 +132,7 @@ describe('summaryResponseSchema ingest_freshness', () => {
       yoy_to_year: null,
       queried_at: stamped,
       refreshed_at: stamped,
-      ingest_freshness: evaluateIngestFreshness(stamped, 168),
+      ingest_freshness: evaluateIngestFreshness(stamped, 168, FIXTURE_NOW),
     });
     expect(parsed.refreshed_at).toBe(stamped);
     expect(parsed.ingest_freshness.refreshedAt).toBe(stamped);
