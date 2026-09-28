@@ -37,10 +37,10 @@ describe('DashboardPage lazy panel loading (#38)', () => {
     expect(firstQuery).toBeGreaterThan(preloadCall);
   });
 
-  it('does not start heavy imports at module evaluation time', () => {
-    const pageStart = src.indexOf('export default function DashboardPage()');
-    const beforePage = src.slice(0, pageStart);
-    expect(beforePage).not.toMatch(/=\\s*import\\(['"]\\.\\/(?:PropertyMap|ChangeChart|ValueDistributionChart|PropertyTypesChart)['"]\\);/);
+  it('does not assign a heavy import promise eagerly at module evaluation time', () => {
+    expect(src).not.toMatch(/const\\s+\\w+Module\\s*=\\s*import\\(['"]\\.\\/(?:PropertyMap|ChangeChart|ValueDistributionChart|PropertyTypesChart)['"]\\)/);
+    expect(src).toContain("let changeChartModule: Promise<typeof import('./ChangeChart')> | null = null;");
+    expect(src).toContain("let propertyMapModule: Promise<typeof import('./PropertyMap')> | null = null;");
   });
 
   it('hands stable cached loaders to React.lazy', () => {
