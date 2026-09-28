@@ -102,6 +102,10 @@ jobs:
             sleep 1
           done
           test "$ok" = "1"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3010/healthz")
+          test "$code" = "200"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3010/readyz")
+          test "$code" = "200"
           code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3010/api/dashboard/summary")
           test "$code" = "401"
           code=$(curl -s -o /tmp/dashboard-summary.json -w '%{http_code}' -u ci-user:ci-pass "http://127.0.0.1:3010/api/dashboard/summary")

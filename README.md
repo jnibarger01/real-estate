@@ -18,7 +18,7 @@ GitHub Pages is a public static shell only. It must not carry `VITE_API_KEY` and
    ├── /api/dashboard/*
    ├── /api/properties/*
    ├── /api/map/*
-   ├── /api/health
+   ├── /healthz (liveness) · /readyz, /api/health (readiness)
    ├── /mcp
    └── /api/provider/*   ← RentCast, secondary
         │
@@ -101,7 +101,8 @@ Authenticated deploy: `bun run build && bun run start` on one origin. The SPA sh
 
 | Path | Auth | Purpose |
 |---|---|---|
-| `GET /api/health`, `/health`, `/healthz` | public | process + Postgres + PostGIS + `api.dashboard_*` + ingest freshness |
+| `GET /healthz`, `/health` | public | liveness: process + Postgres round-trip only (ingest staleness never 503s it) |
+| `GET /readyz`, `/api/health` | public | readiness: Postgres + PostGIS + `api.dashboard_*` + ingest freshness (503 in production when stale) |
 | `GET/POST /api/auth/session|login|logout|touch` | public | SPA session cookie lifecycle (`SESSION_TTL_MS`) |
 | `GET /api/dashboard/*` | required in production | KPIs, distributions, types |
 | `GET/POST/DELETE /api/dashboard/saved-searches` | required in production | Authenticated filter bookmarks (no owner PII columns) |
@@ -174,7 +175,7 @@ Exceeded requests return HTTP **429** with structured JSON:
 
 ## Render
 
-`render.yaml` deploys `backend.ts` (`createApp()`, no Vite). Set `DATABASE_URL`, `DASHBOARD_AUTH_USER`, `DASHBOARD_AUTH_PASSWORD`, and `ALLOWED_ORIGINS`. Confirm `/api/health` reports `queryReadiness.ok: true` before pointing Pages at the service.
+`render.yaml` deploys `backend.ts` (`createApp()`, no Vite). Set `DATABASE_URL`, `DASHBOARD_AUTH_USER`, `DASHBOARD_AUTH_PASSWORD`, and `ALLOWED_ORIGINS`. Render probes `/healthz` (liveness). Confirm `/readyz` reports `queryReadiness.ok: true` before pointing Pages at the service.
 
 ## GitHub Pages
 

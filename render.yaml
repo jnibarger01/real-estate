@@ -5,7 +5,7 @@ services:
     plan: starter
     buildCommand: bun install --frozen-lockfile && bun run db:indexes || true && bun run build
     startCommand: bun run start
-    healthCheckPath: /api/health
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production

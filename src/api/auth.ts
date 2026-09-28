@@ -111,6 +111,7 @@ export function isUnauthenticatedPublicPath(path: string): boolean {
   return (
     path === '/health' ||
     path === '/healthz' ||
+    path === '/readyz' ||
     path === '/api/health' ||
     path === '/api/provider/status' ||
     path === '/api/auth/login' ||
