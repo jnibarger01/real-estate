@@ -92,6 +92,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] text-slate-900">
+      {/* Header */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -105,9 +106,18 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <IngestFreshnessBadge loading={summary.isLoading} freshness={summary.data?.ingest_freshness} />
+              <IngestFreshnessBadge
+                loading={summary.isLoading}
+                freshness={summary.data?.ingest_freshness}
+              />
               {session?.authRequired && (
-                <Button type="button" variant="outline" size="sm" onClick={() => void logout()} data-testid="logout-button">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void logout()}
+                  data-testid="logout-button"
+                >
                   Log out
                 </Button>
               )}
@@ -120,7 +130,11 @@ export default function DashboardPage() {
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         {runtimeConfig.isPagesBuild && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status" data-testid="pages-not-pii">
+          <div
+            className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+            role="status"
+            data-testid="pages-not-pii"
+          >
             This GitHub Pages host is not the authenticated property-records app. Owner names and mailing
             addresses are only available from the same-origin API deploy (`bun run start`), not from a
             static bundle.
@@ -139,13 +153,41 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* KPI cards */}
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Key metrics">
-          <KpiCard icon={<Home className="size-5" />} label="Properties" value={isLoading ? undefined : formatNumber(toNumber(summary.data?.total_properties))} help="Residential parcels" />
-          <KpiCard icon={<DollarSign className="size-5" />} label="Avg Market Value" value={isLoading ? undefined : currency(toNumber(summary.data?.avg_market_value))} help={`Median ${summary.data ? currency(toNumber(summary.data.median_market_value)) : '—'}`} />
-          <KpiCard icon={<Activity className="size-5" />} label="Total Market Value" value={isLoading ? undefined : compactCurrency(toNumber(summary.data?.total_market_value))} help={`${summary.data ? `${formatNumber(toNumber(summary.data.total_properties))} parcels` : ''}`} />
-          <KpiCard icon={<TrendIcon className="size-5" />} label="Value Change (YoY)" testId="kpi-yoy" value={isLoading ? undefined : `${yoy >= 0 ? '+' : ''}${yoy.toFixed(2)}%`} help={summary.data?.yoy_to_year ? `Avg market value, ${summary.data.yoy_to_year} vs ${summary.data.yoy_from_year}` : 'Avg market value, latest vs prior year'} trend={summary.data ? yoy : undefined} />
+          <KpiCard
+            icon={<Home className="size-5" />}
+            label="Properties"
+            value={isLoading ? undefined : formatNumber(toNumber(summary.data?.total_properties))}
+            help="Residential parcels"
+          />
+          <KpiCard
+            icon={<DollarSign className="size-5" />}
+            label="Avg Market Value"
+            value={isLoading ? undefined : currency(toNumber(summary.data?.avg_market_value))}
+            help={`Median ${summary.data ? currency(toNumber(summary.data.median_market_value)) : '—'}`}
+          />
+          <KpiCard
+            icon={<Activity className="size-5" />}
+            label="Total Market Value"
+            value={isLoading ? undefined : compactCurrency(toNumber(summary.data?.total_market_value))}
+            help={`${summary.data ? `${formatNumber(toNumber(summary.data.total_properties))} parcels` : ''}`}
+          />
+          <KpiCard
+            icon={<TrendIcon className="size-5" />}
+            label="Value Change (YoY)"
+            testId="kpi-yoy"
+            value={isLoading ? undefined : `${yoy >= 0 ? '+' : ''}${yoy.toFixed(2)}%`}
+            help={
+              summary.data?.yoy_to_year
+                ? `Avg market value, ${summary.data.yoy_to_year} vs ${summary.data.yoy_from_year}`
+                : 'Avg market value, latest vs prior year'
+            }
+            trend={summary.data ? yoy : undefined}
+          />
         </section>
 
+        {/* Charts row */}
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-label="Market trends">
           <Card>
             <CardHeader>
@@ -155,7 +197,11 @@ export default function DashboardPage() {
             <CardContent>
               <LazyPanelErrorBoundary label="The market value trend chart" className="h-56 w-full">
                 <Suspense fallback={<LazyPanelFallback label="Loading market value trend chart" className="h-56 w-full" />}>
-                  {trends.isLoading ? <Skeleton className="h-56 w-full" /> : <ChangeChart data={trends.data ?? []} />}
+                  {trends.isLoading ? (
+                    <Skeleton className="h-56 w-full" />
+                  ) : (
+                    <ChangeChart data={trends.data ?? []} />
+                  )}
                 </Suspense>
               </LazyPanelErrorBoundary>
             </CardContent>
@@ -169,13 +215,18 @@ export default function DashboardPage() {
             <CardContent>
               <LazyPanelErrorBoundary label="The market value distribution chart" className="h-56 w-full">
                 <Suspense fallback={<LazyPanelFallback label="Loading market value distribution chart" className="h-56 w-full" />}>
-                  {distribution.isLoading ? <Skeleton className="h-56 w-full" /> : <ValueDistributionChart data={distribution.data ?? []} />}
+                  {distribution.isLoading ? (
+                    <Skeleton className="h-56 w-full" />
+                  ) : (
+                    <ValueDistributionChart data={distribution.data ?? []} />
+                  )}
                 </Suspense>
               </LazyPanelErrorBoundary>
             </CardContent>
           </Card>
         </section>
 
+        {/* Property type mix + map */}
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-1">
             <CardHeader>
@@ -185,7 +236,11 @@ export default function DashboardPage() {
             <CardContent>
               <LazyPanelErrorBoundary label="The property type mix chart" className="h-64 w-full">
                 <Suspense fallback={<LazyPanelFallback label="Loading property type mix chart" className="h-64 w-full" />}>
-                  {types.isLoading ? <Skeleton className="h-64 w-full" /> : <PropertyTypesChart data={types.data ?? []} />}
+                  {types.isLoading ? (
+                    <Skeleton className="h-64 w-full" />
+                  ) : (
+                    <PropertyTypesChart data={types.data ?? []} />
+                  )}
                 </Suspense>
               </LazyPanelErrorBoundary>
             </CardContent>
@@ -215,6 +270,7 @@ export default function DashboardPage() {
           </Card>
         </section>
 
+        {/* Explorer table */}
         <PropertyExplorer
           filters={filters}
           selectedPropertyId={selectedPropertyId}
