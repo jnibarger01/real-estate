@@ -10,18 +10,31 @@ import { runtimeConfig } from '../config/runtime';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import KpiCard from './KpiCard';
-import ChangeChart from './ChangeChart';
-import ValueDistributionChart from './ValueDistributionChart';
-import PropertyTypesChart from './PropertyTypesChart';
 import PropertyExplorer from './PropertyExplorer';
-import PropertyMap from './PropertyMap';
 import DashboardFilters, { type DashboardFiltersState } from './DashboardFilters';
 import SavedSearches from './SavedSearches';
 import IngestFreshnessBadge from './IngestFreshnessBadge';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
 import { useDocumentTitle } from '../lib/documentTitle';
+
+// Heavy panels (MapLibre ~1 MB, recharts) load on demand so first paint after
+// login only needs auth, filters, KPI cards, and the explorer.
+const ChangeChart = lazy(() => import('./ChangeChart'));
+const ValueDistributionChart = lazy(() => import('./ValueDistributionChart'));
+const PropertyTypesChart = lazy(() => import('./PropertyTypesChart'));
+const PropertyMap = lazy(() => import('./PropertyMap'));
+
+/** Suspense fallback announced to assistive tech while a panel chunk loads. */
+function PanelFallback({ label, className }: { label: string; className: string }) {
+  return (
+    <div role="status" aria-live="polite" data-testid="panel-loading">
+      <span className="sr-only">{label}</span>
+      <Skeleton className={className} aria-hidden="true" />
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   useDocumentTitle('Dashboard');
@@ -165,7 +178,9 @@ export default function DashboardPage() {
               {trends.isLoading ? (
                 <Skeleton className="h-56 w-full" />
               ) : (
-                <ChangeChart data={trends.data ?? []} />
+                <Suspense fallback={<PanelFallback label="Loading value trend chart…" className="h-56 w-full" />}>
+                  <ChangeChart data={trends.data ?? []} />
+                </Suspense>
               )}
             </CardContent>
           </Card>
@@ -179,7 +194,9 @@ export default function DashboardPage() {
               {distribution.isLoading ? (
                 <Skeleton className="h-56 w-full" />
               ) : (
-                <ValueDistributionChart data={distribution.data ?? []} />
+                <Suspense fallback={<PanelFallback label="Loading value distribution chart…" className="h-56 w-full" />}>
+                  <ValueDistributionChart data={distribution.data ?? []} />
+                </Suspense>
               )}
             </CardContent>
           </Card>
@@ -196,7 +213,9 @@ export default function DashboardPage() {
               {types.isLoading ? (
                 <Skeleton className="h-64 w-full" />
               ) : (
-                <PropertyTypesChart data={types.data ?? []} />
+                <Suspense fallback={<PanelFallback label="Loading property type chart…" className="h-64 w-full" />}>
+                  <PropertyTypesChart data={types.data ?? []} />
+                </Suspense>
               )}
             </CardContent>
           </Card>
@@ -209,14 +228,16 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <PropertyMap
-                onSelect={(parcelId, propertyId) => {
-                  setSelectedParcelId(parcelId);
-                  setSelectedPropertyId(propertyId);
-                }}
-                selectedParcelId={selectedParcelId}
-                focus={focus}
-              />
+              <Suspense fallback={<PanelFallback label="Loading map…" className="h-[420px] w-full" />}>
+                <PropertyMap
+                  onSelect={(parcelId, propertyId) => {
+                    setSelectedParcelId(parcelId);
+                    setSelectedPropertyId(propertyId);
+                  }}
+                  selectedParcelId={selectedParcelId}
+                  focus={focus}
+                />
+              </Suspense>
             </CardContent>
           </Card>
         </section>
