@@ -7,15 +7,13 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * real-estate#38: DashboardPage must lazy-load the heavy map/chart panels so
- * first paint after login only pulls the KPI/filters/search code. This is a
- * source-contract test because the unit suite runs in a node environment
- * without a DOM; the Vite production build verifies the lazy chunks exist.
+ * real-estate#38: DashboardPage must split the heavy map/chart panels out of
+ * the eager bundle, start those transfers alongside the dashboard queries,
+ * and contain lazy-chunk failures so the dashboard shell stays usable.
  */
 const TEST_DIR = import.meta.dirname;
 const SOURCE_PATH = join(TEST_DIR, '..', 'src', 'dashboard', 'DashboardPage.tsx');
 const HEAVY_MODULES = ['PropertyMap', 'ChangeChart', 'ValueDistributionChart', 'PropertyTypesChart'];
-// Panels that must stay eager: auth shell, filters, KPI cards, saved searches.
 const EAGER_MODULES = ['KpiCard', 'DashboardFilters', 'SavedSearches', 'IngestFreshnessBadge', 'PropertyExplorer'];
 
 describe('DashboardPage lazy panel loading (#38)', () => {
@@ -26,8 +24,15 @@ describe('DashboardPage lazy panel loading (#38)', () => {
     expect(src).not.toMatch(staticImport);
   });
 
-  it.each(HEAVY_MODULES)('loads %s via React.lazy', (mod) => {
-    expect(src).toContain(`lazy(() => import('./${mod}'))`);
+  it.each(HEAVY_MODULES)('starts the %s dynamic import during dashboard module evaluation', (mod) => {
+    expect(src).toMatch(new RegExp(`const\\s+\\w+Module\\s*=\\s*import\\(['"]\\.\\/${mod}['"]\\)`));
+  });
+
+  it('hands the preloaded modules to React.lazy instead of delaying import until query completion', () => {
+    expect(src).toContain('const ChangeChart = lazy(() => changeChartModule);');
+    expect(src).toContain('const ValueDistributionChart = lazy(() => valueDistributionChartModule);');
+    expect(src).toContain('const PropertyTypesChart = lazy(() => propertyTypesChartModule);');
+    expect(src).toContain('const PropertyMap = lazy(() => propertyMapModule);');
   });
 
   it.each(EAGER_MODULES)('keeps %s eager', (mod) => {
@@ -37,6 +42,14 @@ describe('DashboardPage lazy panel loading (#38)', () => {
   it('has at least two Suspense boundaries for the lazy panels', () => {
     const boundaries = (src.match(/<Suspense\b/g) ?? []).length;
     expect(boundaries).toBeGreaterThanOrEqual(2);
+  });
+
+  it('contains lazy import failures and exposes a reload retry without losing the dashboard shell', () => {
+    expect(src).toContain('class LazyPanelErrorBoundary extends Component');
+    expect(src).toContain('static getDerivedStateFromError()');
+    expect(src).toContain('role="alert"');
+    expect(src).toContain('window.location.reload()');
+    expect(src).toContain('Reload dashboard');
   });
 
   it('announces lazy fallbacks to assistive technology', () => {
