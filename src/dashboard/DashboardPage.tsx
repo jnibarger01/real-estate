@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Component, Suspense, lazy, useState, type ReactNode } from 'react';
+import * as React from 'react';
+import { Suspense, lazy, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Building2, DollarSign, Home, TrendingDown, TrendingUp } from 'lucide-react';
 import { api, compactCurrency, currency, formatNumber, isUnauthorized, toNumber } from '../lib/api';
@@ -18,18 +19,40 @@ import IngestFreshnessBadge from './IngestFreshnessBadge';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
 
-// Start the heavy dynamic imports as soon as the authenticated dashboard module
-// evaluates. They remain split chunks, but transfer overlaps with the dashboard
-// data queries instead of waiting for each query to resolve first.
-const changeChartModule = import('./ChangeChart');
-const valueDistributionChartModule = import('./ValueDistributionChart');
-const propertyTypesChartModule = import('./PropertyTypesChart');
-const propertyMapModule = import('./PropertyMap');
+// Cache each heavy module after the authenticated dashboard first asks for it.
+// DashboardPage primes these loaders before starting its queries, preserving
+// transfer/query overlap without downloading the chunks on the login screen.
+let changeChartModule: Promise<typeof import('./ChangeChart')> | null = null;
+let valueDistributionChartModule: Promise<typeof import('./ValueDistributionChart')> | null = null;
+let propertyTypesChartModule: Promise<typeof import('./PropertyTypesChart')> | null = null;
+let propertyMapModule: Promise<typeof import('./PropertyMap')> | null = null;
 
-const ChangeChart = lazy(() => changeChartModule);
-const ValueDistributionChart = lazy(() => valueDistributionChartModule);
-const PropertyTypesChart = lazy(() => propertyTypesChartModule);
-const PropertyMap = lazy(() => propertyMapModule);
+function loadChangeChart() {
+  return (changeChartModule ??= import('./ChangeChart'));
+}
+function loadValueDistributionChart() {
+  return (valueDistributionChartModule ??= import('./ValueDistributionChart'));
+}
+function loadPropertyTypesChart() {
+  return (propertyTypesChartModule ??= import('./PropertyTypesChart'));
+}
+function loadPropertyMap() {
+  return (propertyMapModule ??= import('./PropertyMap'));
+}
+
+const ChangeChart = lazy(loadChangeChart);
+const ValueDistributionChart = lazy(loadValueDistributionChart);
+const PropertyTypesChart = lazy(loadPropertyTypesChart);
+const PropertyMap = lazy(loadPropertyMap);
+
+function preloadDashboardPanels() {
+  // Attach rejection handlers to the speculative loads; React.lazy will surface
+  // the same cached rejection through the panel error boundary when rendered.
+  void loadChangeChart().catch(() => undefined);
+  void loadValueDistributionChart().catch(() => undefined);
+  void loadPropertyTypesChart().catch(() => undefined);
+  void loadPropertyMap().catch(() => undefined);
+}
 
 /** Accessible loading fallback for a lazily loaded dashboard panel. */
 function LazyPanelFallback({ label, className }: { label: string; className?: string }) {
@@ -41,7 +64,7 @@ function LazyPanelFallback({ label, className }: { label: string; className?: st
   );
 }
 
-class LazyPanelErrorBoundary extends Component<
+class LazyPanelErrorBoundary extends React.Component<
   { children: ReactNode; label: string; className?: string },
   { failed: boolean }
 > {
@@ -71,6 +94,7 @@ class LazyPanelErrorBoundary extends Component<
 }
 
 export default function DashboardPage() {
+  preloadDashboardPanels();
   const { logout, session } = useAuth();
   const [filters, setFilters] = useState<DashboardFiltersState>({});
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
