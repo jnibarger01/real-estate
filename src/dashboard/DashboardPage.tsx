@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Suspense, lazy, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Building2, DollarSign, Home, TrendingDown, TrendingUp } from 'lucide-react';
 import { api, compactCurrency, currency, formatNumber, isUnauthorized, toNumber } from '../lib/api';
@@ -10,17 +11,30 @@ import { runtimeConfig } from '../config/runtime';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import KpiCard from './KpiCard';
-import ChangeChart from './ChangeChart';
-import ValueDistributionChart from './ValueDistributionChart';
-import PropertyTypesChart from './PropertyTypesChart';
 import PropertyExplorer from './PropertyExplorer';
-import PropertyMap from './PropertyMap';
 import DashboardFilters, { type DashboardFiltersState } from './DashboardFilters';
 import SavedSearches from './SavedSearches';
 import IngestFreshnessBadge from './IngestFreshnessBadge';
-import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
+
+// Heavy panels load lazily so first paint after login only downloads the code
+// needed for KPIs, filters, and saved searches. Chart/map chunks fetch in
+// parallel with the dashboard queries below.
+const ChangeChart = lazy(() => import('./ChangeChart'));
+const ValueDistributionChart = lazy(() => import('./ValueDistributionChart'));
+const PropertyTypesChart = lazy(() => import('./PropertyTypesChart'));
+const PropertyMap = lazy(() => import('./PropertyMap'));
+
+/** Accessible loading fallback for a lazily loaded dashboard panel. */
+function LazyPanelFallback({ label, className }: { label: string; className?: string }) {
+  return (
+    <div role="status" aria-label={label} className={className}>
+      <Skeleton className="h-full w-full" aria-hidden="true" />
+      <span className="sr-only">{label}…</span>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { logout, session } = useAuth();
@@ -147,11 +161,13 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">Five-year trend, all residential parcels</p>
             </CardHeader>
             <CardContent>
-              {trends.isLoading ? (
-                <Skeleton className="h-56 w-full" />
-              ) : (
-                <ChangeChart data={trends.data ?? []} />
-              )}
+              <Suspense fallback={<LazyPanelFallback label="Loading market value trend chart" className="h-56 w-full" />}>
+                {trends.isLoading ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <ChangeChart data={trends.data ?? []} />
+                )}
+              </Suspense>
             </CardContent>
           </Card>
 
@@ -161,11 +177,13 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">Parcel count by market value bucket</p>
             </CardHeader>
             <CardContent>
-              {distribution.isLoading ? (
-                <Skeleton className="h-56 w-full" />
-              ) : (
-                <ValueDistributionChart data={distribution.data ?? []} />
-              )}
+              <Suspense fallback={<LazyPanelFallback label="Loading market value distribution chart" className="h-56 w-full" />}>
+                {distribution.isLoading ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <ValueDistributionChart data={distribution.data ?? []} />
+                )}
+              </Suspense>
             </CardContent>
           </Card>
         </section>
@@ -178,11 +196,13 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">By land-use category</p>
             </CardHeader>
             <CardContent>
-              {types.isLoading ? (
-                <Skeleton className="h-64 w-full" />
-              ) : (
-                <PropertyTypesChart data={types.data ?? []} />
-              )}
+              <Suspense fallback={<LazyPanelFallback label="Loading property type mix chart" className="h-64 w-full" />}>
+                {types.isLoading ? (
+                  <Skeleton className="h-64 w-full" />
+                ) : (
+                  <PropertyTypesChart data={types.data ?? []} />
+                )}
+              </Suspense>
             </CardContent>
           </Card>
 
@@ -194,14 +214,16 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <PropertyMap
-                onSelect={(parcelId, propertyId) => {
-                  setSelectedParcelId(parcelId);
-                  setSelectedPropertyId(propertyId);
-                }}
-                selectedParcelId={selectedParcelId}
-                focus={focus}
-              />
+              <Suspense fallback={<LazyPanelFallback label="Loading property map" className="h-[420px] w-full" />}>
+                <PropertyMap
+                  onSelect={(parcelId, propertyId) => {
+                    setSelectedParcelId(parcelId);
+                    setSelectedPropertyId(propertyId);
+                  }}
+                  selectedParcelId={selectedParcelId}
+                  focus={focus}
+                />
+              </Suspense>
             </CardContent>
           </Card>
         </section>
