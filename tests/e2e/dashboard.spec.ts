@@ -97,3 +97,20 @@ test('production CSP header is present and the dashboard loads without CSP viola
   await page.waitForTimeout(1_500); // let map workers/style requests settle
   expect(violations, violations.join('\n')).toEqual([]);
 });
+
+test('document title reflects Sign in vs Dashboard across logout → login', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('login-page')).toBeVisible();
+  await expect(page).toHaveTitle('Sign in · Jackson County Property Intelligence');
+
+  await loginViaForm(page);
+  await expect(page).toHaveTitle('Dashboard · Jackson County Property Intelligence');
+
+  await expect(page.getByTestId('logout-button')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('logout-button').click();
+  await expect(page.getByTestId('login-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page).toHaveTitle('Sign in · Jackson County Property Intelligence');
+
+  await loginViaForm(page);
+  await expect(page).toHaveTitle('Dashboard · Jackson County Property Intelligence');
+});
