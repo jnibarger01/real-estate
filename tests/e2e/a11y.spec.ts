@@ -64,3 +64,20 @@ test('keyboard Enter submits property search', async ({ page }) => {
   await expect(page.getByTestId('property-row')).toHaveCount(1, { timeout: 30_000 });
   await expect(page.getByTestId('property-row').first()).toContainText(/100 MAIN ST/i);
 });
+
+test('skip link is the first tab stop and moves focus into #main', async ({ page }) => {
+  await loginViaForm(page);
+  await expect(page.locator('main#main')).toHaveCount(1);
+  await expect(page.locator('main#main')).toHaveAttribute('tabindex', '-1');
+
+  // Start from the document, not whatever the login form left focused.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Tab');
+  const skip = page.getByTestId('skip-link');
+  await expect(skip).toBeFocused();
+  await expect(skip).toHaveAttribute('href', '#main');
+  await expect(skip).toBeVisible();
+
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main#main')).toBeFocused();
+});

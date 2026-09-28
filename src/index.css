@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+/* Skip link: visually hidden until keyboard focus (first tab stop after login). */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: #4c1d95;
+  color: #fff;
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
