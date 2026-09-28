@@ -40,11 +40,55 @@ export const requestId: RequestHandler = (req, res, next) => {
   next();
 };
 
-export const securityHeaders = helmet({
-  contentSecurityPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  hsts: process.env.NODE_ENV === 'production' ? { maxAge: 15552000, includeSubDomains: true } : false,
-});
+/**
+ * Production CSP for the same-origin Vite SPA + API. MapLibre needs blob:
+ * workers and tile/style hosts; MapLibre/Leaflet inject inline styles, so
+ * style-src keeps 'unsafe-inline'. Non-production keeps CSP off so Vite HMR
+ * works. Pages is a separate static shell and is out of scope here.
+ */
+const productionCsp = {
+  useDefaults: false,
+  directives: {
+    defaultSrc: ["'self'"],
+    baseUri: ["'none'"],
+    frameAncestors: ["'none'"],
+    objectSrc: ["'none'"],
+    formAction: ["'self'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: [
+      "'self'",
+      'data:',
+      'blob:',
+      'https://tiles.openfreemap.org',
+      'https://*.tile.openstreetmap.org',
+      'https://*.basemaps.cartocdn.com',
+      'https://server.arcgisonline.com',
+      'https://images.unsplash.com',
+    ],
+    connectSrc: [
+      "'self'",
+      'https://tiles.openfreemap.org',
+      'https://*.tile.openstreetmap.org',
+      'https://*.basemaps.cartocdn.com',
+      'https://server.arcgisonline.com',
+      'https://api.rentcast.io',
+    ],
+    fontSrc: ["'self'", 'data:', 'https://tiles.openfreemap.org'],
+    workerSrc: ["'self'", 'blob:'],
+    childSrc: ["'self'", 'blob:'],
+  },
+} as const;
+
+/** Build Helmet middleware; read NODE_ENV at call time (createApp), not import time. */
+export function createSecurityHeaders(): RequestHandler {
+  const isProd = process.env.NODE_ENV === 'production';
+  return helmet({
+    contentSecurityPolicy: isProd ? productionCsp : false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    hsts: isProd ? { maxAge: 15552000, includeSubDomains: true } : false,
+  });
+}
 
 /** Per-principal bucket: session user, validated Basic user, API key, else IP. */
 export function rateLimitKeyForRequest(req: Request): string {

@@ -10,7 +10,7 @@ import { inspectDatabase, pingDatabase } from './db/pool.js';
 import dashboardRouter from './routes/dashboard.js';
 import authRouter from './routes/auth.js';
 import { createProviderRouter } from './routes/provider.js';
-import { apiRateLimit, accessLog, corsAllowList, piiRateLimit, requestId, securityHeaders } from '../server/httpDefaults.js';
+import { apiRateLimit, accessLog, corsAllowList, createSecurityHeaders, piiRateLimit, requestId } from '../server/httpDefaults.js';
 import { createProtectMiddleware, isPublicApiPath, mcpEnabled } from './auth.js';
 import { handleMcpJsonRpc } from './mcp.js';
 
@@ -20,7 +20,7 @@ export function createApp(options: { enforceAuth?: boolean } = {}): express.Expr
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  app.use(securityHeaders);
+  app.use(createSecurityHeaders());
   app.use(express.json({ limit: '1mb' }));
   app.use(requestId);
   app.use(accessLog);
