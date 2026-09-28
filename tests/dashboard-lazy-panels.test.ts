@@ -38,7 +38,7 @@ describe('DashboardPage lazy panel loading (#38)', () => {
   });
 
   it('does not assign a heavy import promise eagerly at module evaluation time', () => {
-    expect(src).not.toMatch(/const\\s+\\w+Module\\s*=\\s*import\\(['"]\\.\\/(?:PropertyMap|ChangeChart|ValueDistributionChart|PropertyTypesChart)['"]\\)/);
+    expect(src).not.toMatch(/const\s+\w+Module\s*=\s*import\(['"]\.\/(?:PropertyMap|ChangeChart|ValueDistributionChart|PropertyTypesChart)['"]\)/);
     expect(src).toContain("let changeChartModule: Promise<typeof import('./ChangeChart')> | null = null;");
     expect(src).toContain("let propertyMapModule: Promise<typeof import('./PropertyMap')> | null = null;");
   });
