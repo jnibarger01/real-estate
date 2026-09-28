@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, lazy, useState } from 'react';
+import { Component, Suspense, lazy, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Building2, DollarSign, Home, TrendingDown, TrendingUp } from 'lucide-react';
 import { api, compactCurrency, currency, formatNumber, isUnauthorized, toNumber } from '../lib/api';
@@ -18,13 +18,18 @@ import IngestFreshnessBadge from './IngestFreshnessBadge';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../auth/AuthContext';
 
-// Heavy panels load lazily so first paint after login only downloads the code
-// needed for KPIs, filters, and saved searches. Chart/map chunks fetch in
-// parallel with the dashboard queries below.
-const ChangeChart = lazy(() => import('./ChangeChart'));
-const ValueDistributionChart = lazy(() => import('./ValueDistributionChart'));
-const PropertyTypesChart = lazy(() => import('./PropertyTypesChart'));
-const PropertyMap = lazy(() => import('./PropertyMap'));
+// Start the heavy dynamic imports as soon as the authenticated dashboard module
+// evaluates. They remain split chunks, but transfer overlaps with the dashboard
+// data queries instead of waiting for each query to resolve first.
+const changeChartModule = import('./ChangeChart');
+const valueDistributionChartModule = import('./ValueDistributionChart');
+const propertyTypesChartModule = import('./PropertyTypesChart');
+const propertyMapModule = import('./PropertyMap');
+
+const ChangeChart = lazy(() => changeChartModule);
+const ValueDistributionChart = lazy(() => valueDistributionChartModule);
+const PropertyTypesChart = lazy(() => propertyTypesChartModule);
+const PropertyMap = lazy(() => propertyMapModule);
 
 /** Accessible loading fallback for a lazily loaded dashboard panel. */
 function LazyPanelFallback({ label, className }: { label: string; className?: string }) {
@@ -34,6 +39,35 @@ function LazyPanelFallback({ label, className }: { label: string; className?: st
       <span className="sr-only">{label}…</span>
     </div>
   );
+}
+
+class LazyPanelErrorBoundary extends Component<
+  { children: ReactNode; label: string; className?: string },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div
+          role="alert"
+          className={`flex ${this.props.className ?? ''} flex-col items-center justify-center gap-3 rounded-md border border-rose-200 bg-rose-50 p-4 text-center text-sm text-rose-900`}
+        >
+          <p>{this.props.label} could not be loaded. Reload the dashboard to retry.</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()}>
+            Reload dashboard
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 export default function DashboardPage() {
@@ -58,7 +92,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] text-slate-900">
-      {/* Header */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -72,18 +105,9 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <IngestFreshnessBadge
-                loading={summary.isLoading}
-                freshness={summary.data?.ingest_freshness}
-              />
+              <IngestFreshnessBadge loading={summary.isLoading} freshness={summary.data?.ingest_freshness} />
               {session?.authRequired && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void logout()}
-                  data-testid="logout-button"
-                >
+                <Button type="button" variant="outline" size="sm" onClick={() => void logout()} data-testid="logout-button">
                   Log out
                 </Button>
               )}
@@ -96,11 +120,7 @@ export default function DashboardPage() {
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         {runtimeConfig.isPagesBuild && (
-          <div
-            className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
-            role="status"
-            data-testid="pages-not-pii"
-          >
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="status" data-testid="pages-not-pii">
             This GitHub Pages host is not the authenticated property-records app. Owner names and mailing
             addresses are only available from the same-origin API deploy (`bun run start`), not from a
             static bundle.
@@ -119,41 +139,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* KPI cards */}
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Key metrics">
-          <KpiCard
-            icon={<Home className="size-5" />}
-            label="Properties"
-            value={isLoading ? undefined : formatNumber(toNumber(summary.data?.total_properties))}
-            help="Residential parcels"
-          />
-          <KpiCard
-            icon={<DollarSign className="size-5" />}
-            label="Avg Market Value"
-            value={isLoading ? undefined : currency(toNumber(summary.data?.avg_market_value))}
-            help={`Median ${summary.data ? currency(toNumber(summary.data.median_market_value)) : '—'}`}
-          />
-          <KpiCard
-            icon={<Activity className="size-5" />}
-            label="Total Market Value"
-            value={isLoading ? undefined : compactCurrency(toNumber(summary.data?.total_market_value))}
-            help={`${summary.data ? `${formatNumber(toNumber(summary.data.total_properties))} parcels` : ''}`}
-          />
-          <KpiCard
-            icon={<TrendIcon className="size-5" />}
-            label="Value Change (YoY)"
-            testId="kpi-yoy"
-            value={isLoading ? undefined : `${yoy >= 0 ? '+' : ''}${yoy.toFixed(2)}%`}
-            help={
-              summary.data?.yoy_to_year
-                ? `Avg market value, ${summary.data.yoy_to_year} vs ${summary.data.yoy_from_year}`
-                : 'Avg market value, latest vs prior year'
-            }
-            trend={summary.data ? yoy : undefined}
-          />
+          <KpiCard icon={<Home className="size-5" />} label="Properties" value={isLoading ? undefined : formatNumber(toNumber(summary.data?.total_properties))} help="Residential parcels" />
+          <KpiCard icon={<DollarSign className="size-5" />} label="Avg Market Value" value={isLoading ? undefined : currency(toNumber(summary.data?.avg_market_value))} help={`Median ${summary.data ? currency(toNumber(summary.data.median_market_value)) : '—'}`} />
+          <KpiCard icon={<Activity className="size-5" />} label="Total Market Value" value={isLoading ? undefined : compactCurrency(toNumber(summary.data?.total_market_value))} help={`${summary.data ? `${formatNumber(toNumber(summary.data.total_properties))} parcels` : ''}`} />
+          <KpiCard icon={<TrendIcon className="size-5" />} label="Value Change (YoY)" testId="kpi-yoy" value={isLoading ? undefined : `${yoy >= 0 ? '+' : ''}${yoy.toFixed(2)}%`} help={summary.data?.yoy_to_year ? `Avg market value, ${summary.data.yoy_to_year} vs ${summary.data.yoy_from_year}` : 'Avg market value, latest vs prior year'} trend={summary.data ? yoy : undefined} />
         </section>
 
-        {/* Charts row */}
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-label="Market trends">
           <Card>
             <CardHeader>
@@ -161,13 +153,11 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">Five-year trend, all residential parcels</p>
             </CardHeader>
             <CardContent>
-              <Suspense fallback={<LazyPanelFallback label="Loading market value trend chart" className="h-56 w-full" />}>
-                {trends.isLoading ? (
-                  <Skeleton className="h-56 w-full" />
-                ) : (
-                  <ChangeChart data={trends.data ?? []} />
-                )}
-              </Suspense>
+              <LazyPanelErrorBoundary label="The market value trend chart" className="h-56 w-full">
+                <Suspense fallback={<LazyPanelFallback label="Loading market value trend chart" className="h-56 w-full" />}>
+                  {trends.isLoading ? <Skeleton className="h-56 w-full" /> : <ChangeChart data={trends.data ?? []} />}
+                </Suspense>
+              </LazyPanelErrorBoundary>
             </CardContent>
           </Card>
 
@@ -177,18 +167,15 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">Parcel count by market value bucket</p>
             </CardHeader>
             <CardContent>
-              <Suspense fallback={<LazyPanelFallback label="Loading market value distribution chart" className="h-56 w-full" />}>
-                {distribution.isLoading ? (
-                  <Skeleton className="h-56 w-full" />
-                ) : (
-                  <ValueDistributionChart data={distribution.data ?? []} />
-                )}
-              </Suspense>
+              <LazyPanelErrorBoundary label="The market value distribution chart" className="h-56 w-full">
+                <Suspense fallback={<LazyPanelFallback label="Loading market value distribution chart" className="h-56 w-full" />}>
+                  {distribution.isLoading ? <Skeleton className="h-56 w-full" /> : <ValueDistributionChart data={distribution.data ?? []} />}
+                </Suspense>
+              </LazyPanelErrorBoundary>
             </CardContent>
           </Card>
         </section>
 
-        {/* Property type mix + map */}
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-1">
             <CardHeader>
@@ -196,13 +183,11 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">By land-use category</p>
             </CardHeader>
             <CardContent>
-              <Suspense fallback={<LazyPanelFallback label="Loading property type mix chart" className="h-64 w-full" />}>
-                {types.isLoading ? (
-                  <Skeleton className="h-64 w-full" />
-                ) : (
-                  <PropertyTypesChart data={types.data ?? []} />
-                )}
-              </Suspense>
+              <LazyPanelErrorBoundary label="The property type mix chart" className="h-64 w-full">
+                <Suspense fallback={<LazyPanelFallback label="Loading property type mix chart" className="h-64 w-full" />}>
+                  {types.isLoading ? <Skeleton className="h-64 w-full" /> : <PropertyTypesChart data={types.data ?? []} />}
+                </Suspense>
+              </LazyPanelErrorBoundary>
             </CardContent>
           </Card>
 
@@ -214,21 +199,22 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Suspense fallback={<LazyPanelFallback label="Loading property map" className="h-[420px] w-full" />}>
-                <PropertyMap
-                  onSelect={(parcelId, propertyId) => {
-                    setSelectedParcelId(parcelId);
-                    setSelectedPropertyId(propertyId);
-                  }}
-                  selectedParcelId={selectedParcelId}
-                  focus={focus}
-                />
-              </Suspense>
+              <LazyPanelErrorBoundary label="The property map" className="h-[420px] w-full">
+                <Suspense fallback={<LazyPanelFallback label="Loading property map" className="h-[420px] w-full" />}>
+                  <PropertyMap
+                    onSelect={(parcelId, propertyId) => {
+                      setSelectedParcelId(parcelId);
+                      setSelectedPropertyId(propertyId);
+                    }}
+                    selectedParcelId={selectedParcelId}
+                    focus={focus}
+                  />
+                </Suspense>
+              </LazyPanelErrorBoundary>
             </CardContent>
           </Card>
         </section>
 
-        {/* Explorer table */}
         <PropertyExplorer
           filters={filters}
           selectedPropertyId={selectedPropertyId}
