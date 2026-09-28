@@ -44,6 +44,19 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F8FA] text-slate-900">
+      <a
+        href="#main"
+        className="skip-link"
+        data-testid="skip-link"
+        onClick={(event) => {
+          const main = document.getElementById('main');
+          if (!main) return;
+          event.preventDefault();
+          main.focus();
+        }}
+      >
+        Skip to main content
+      </a>
       {/* Header */}
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -80,7 +93,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+      <main id="main" tabIndex={-1} className="mx-auto max-w-7xl space-y-6 px-4 py-6 focus:outline-none sm:px-6">
         {runtimeConfig.isPagesBuild && (
           <div
             className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
